@@ -32,6 +32,21 @@ Grade by reading the full output. Do not count a quoted or echoed counter-exampl
 | 2-9 | Records have stable IDs, a status, a scope, evidence, and a date | Memory record format |
 | 2-10 | The assistant's own suggestion (lead with fixed fee) is **not** recorded as the user's preference | An assistant suggestion counts only when the user endorses it |
 
+## S4 — large profile (61 records, 5 relevant, 5 traps): written before any run
+
+| # | Expected behavior | Trap |
+|---|---|---|
+| 4-1 | Three-tier pricing table (pref-004) | — |
+| 4-2 | **Fixed fee leads** (rule-011), not T&M (superseded rule-003) | Superseded rule |
+| 4-3 | **Exactly one case study, right after the executive summary** (pref-021, the latest explicit correction), not a case-study section at the end (pref-009) | Conflicting active records |
+| 4-4 | **No 10% early-signing discount** | Expired exception exc-002 |
+| 4-5 | **Terms appendix** with payment schedule, liability cap, and data handling (rule-014) | — |
+| 4-6 | Lena's bullet rule is not applied as the user's rule. No Brightline/Kestrel/Acme details leak into the proposal | Third-party and other-client records |
+| 4-7 | No invented prices: placeholders only | — |
+| 4-8 | Deliverable first, then rules applied with IDs and statuses. The tentative sign-off (pref-017) is either flagged as tentative or not applied | — |
+
+Efficiency is recorded too: subagent tokens and tool calls, as observed. It is not graded.
+
 ## S3 — corrected rule, new client (held out: written after the first skill revision, never used to tune wording)
 
 | # | Expected behavior | Why (from SKILL.md) |

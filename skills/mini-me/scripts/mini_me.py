@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
-"""Mini Me profile tool: validate, show, export, forget, next-id.
+"""Mini Me profile engine: recall, add, review, show, export, forget, validate, next-id, init.
 
 Stdlib only. The profile is a private Markdown file (see references/profile-format.md).
 Path resolution: --profile, then $MINI_ME_PROFILE, then ~/.mini-me/profile.md.
+Every command is also available as a function returning text, so scripts/mcp_server.py
+can expose the same behavior to any MCP-capable agent.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import hashlib
+import json
+import math
 import os
 import re
 import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+
+__version__ = "2.0.0"
 
 TYPES = {
     "goal": "Goal",
@@ -39,6 +45,7 @@ TYPE_ALIASES = {
     "project state": "proj",
 }
 STATUSES = {"confirmed", "likely", "tentative", "superseded"}
+STATUS_RANK = {"tentative": 0, "likely": 1, "confirmed": 2}
 INFERRED = {"likely", "tentative"}
 SENSITIVITY = {"ordinary", "sensitive"}
 COMMON_REQUIRED = ["Evidence", "Sources", "Reason", "Status", "Source date", "Updated", "Sensitivity"]
@@ -48,8 +55,14 @@ EXTRA_REQUIRED = {
     "sens": ["Purpose"],
     "proj": ["Project", "Latest version", "Last decision", "Next step"],
 }
+FIELD_ORDER = [
+    "Said by", "Project", "Constraints", "Latest version", "Last decision", "Completed", "Next step",
+    "Condition", "Action", "Scope", "Exceptions", "Expires", "Purpose", "Evidence", "Sources", "Reason",
+    "Status", "Source date", "Updated", "Supersedes", "Sensitivity",
+]
 PRIVATE_FIELDS = {"Evidence", "Sources"}
 EMPTY = {"", "—", "-", "none", "n/a"}
+SELF = {"", "user", "the user", "me", "self", "—", "-"}
 
 HEADING_RE = re.compile(r"^###\s+(?P<id>\S+)\s+[·\-–|]\s+(?P<type>.+?)\s*$")
 FIELD_RE = re.compile(r"^-\s+(?P<key>[A-Za-z][A-Za-z \-]*?)\s*:\s*(?P<value>.*)$")
@@ -72,18 +85,24 @@ SECRET_PATTERNS = [
 ]
 
 
+class MiniMeError(Exception):
+    """A user-facing failure: bad input, a validation error, or a concurrent edit."""
+
+
+# --------------------------------------------------------------------------- parsing
+
 @dataclass
 class Record:
     id: str
     type_label: str
-    line: int
+    line: int  # 1-based heading line
     fields: dict[str, str] = field(default_factory=dict)
     end_line: int = 0  # exclusive, 0-based index into lines
 
     @property
     def prefix(self) -> str:
         m = ID_RE.match(self.id)
-        return m.group("prefix") if m else ""
+        return m.group("prefix") if m else (type_prefix(self.type_label) or "")
 
     @property
     def status(self) -> str:
@@ -92,9 +111,16 @@ class Record:
     def get(self, key: str) -> str:
         return self.fields.get(key, "").strip()
 
-    def sources(self) -> set[str]:
-        raw = self.get("Sources")
-        return {s.strip().lower() for s in re.split(r"[,;]", raw) if s.strip().lower() not in EMPTY}
+    def sources(self) -> list[str]:
+        out: list[str] = []
+        for s in re.split(r"[,;]", self.get("Sources")):
+            s = s.strip()
+            if s.lower() not in EMPTY and s.lower() not in {x.lower() for x in out}:
+                out.append(s)
+        return out
+
+    def date(self) -> dt.date:
+        return parse_date(self.get("Updated")) or parse_date(self.get("Source date")) or dt.date.min
 
 
 @dataclass
@@ -103,11 +129,16 @@ class Profile:
     text: str
     lines: list[str]
     records: list[Record]
-    start_index: dict[str, int]  # record id -> 0-based heading line index
 
     @property
     def digest(self) -> str:
         return hashlib.sha256(self.text.encode()).hexdigest()
+
+    def by_id(self) -> dict[str, Record]:
+        out: dict[str, Record] = {}
+        for r in self.records:
+            out.setdefault(r.id, r)
+        return out
 
 
 def resolve_path(arg: str | None) -> Path:
@@ -120,10 +151,12 @@ def resolve_path(arg: str | None) -> Path:
 
 
 def parse(path: Path) -> Profile:
-    text = path.read_text(encoding="utf-8")
+    return parse_text(path.read_text(encoding="utf-8"), path)
+
+
+def parse_text(text: str, path: Path) -> Profile:
     lines = text.splitlines()
     records: list[Record] = []
-    start_index: dict[str, int] = {}
     current: Record | None = None
     last_key: str | None = None
     in_comment = False
@@ -142,7 +175,6 @@ def parse(path: Path) -> Profile:
                 current.end_line = i
             current = Record(id=m.group("id"), type_label=m.group("type").strip(), line=i + 1)
             records.append(current)
-            start_index.setdefault(current.id, i)
             last_key = None
             continue
         if stripped.startswith("#"):
@@ -162,7 +194,11 @@ def parse(path: Path) -> Profile:
             current.fields[last_key] += " " + stripped  # wrapped continuation line
     if current:
         current.end_line = len(lines)
-    return Profile(path=path, text=text, lines=lines, records=records, start_index=start_index)
+    # Trim trailing blank lines from each record's span.
+    for r in records:
+        while r.end_line > r.line and not lines[r.end_line - 1].strip():
+            r.end_line -= 1
+    return Profile(path=path, text=text, lines=lines, records=records)
 
 
 def normalize_key(key: str) -> str:
@@ -171,7 +207,10 @@ def normalize_key(key: str) -> str:
 
 
 def type_prefix(label: str) -> str | None:
-    return TYPE_ALIASES.get(label.strip().lower())
+    label = label.strip().lower()
+    if label in TYPES:
+        return label
+    return TYPE_ALIASES.get(label)
 
 
 def is_empty(value: str) -> bool:
@@ -187,6 +226,125 @@ def parse_date(value: str) -> dt.date | None:
     except ValueError:
         return None
 
+
+def said_by_other(r: Record) -> bool:
+    return r.get("Said by").lower() not in SELF
+
+
+def is_expired(r: Record, today: dt.date) -> bool:
+    exp = parse_date(r.get("Expires"))
+    return bool(exp and exp < today)
+
+
+def is_active(r: Record, today: dt.date) -> bool:
+    return r.status != "superseded" and not is_expired(r, today)
+
+
+# --------------------------------------------------------------------------- text similarity
+
+STOP = set("""a an the to for of and or in on with is are be by as at from that this it its my your our their
+we they i you he she them his her if then than so do does did can will would should could may might must
+when while into about over under after before up out not no yes all any some each every""".split())
+
+
+# Verbs that name the same act of producing a document. Kept tiny on purpose: precision matters.
+SYNONYMS = {
+    "draft": "writ", "write": "writ", "compose": "writ", "prepare": "writ",
+    "creat": "make", "create": "make", "build": "make",
+    "direction": "option", "alternative": "option", "concept": "option", "variant": "option", "choice": "option",
+    "customer": "client", "buyer": "client",
+    "deck": "slide", "presentation": "slide",
+    "quote": "proposal", "bid": "proposal", "pitch": "proposal",
+    "mail": "email", "message": "email",
+    "bug": "defect",
+}
+
+
+def stem(w: str) -> str:
+    if w in SYNONYMS:
+        return SYNONYMS[w]
+    if len(w) > 4 and w.endswith("ies"):
+        return w[:-3] + "y"
+    for suf in ("ing", "ed", "es", "s"):
+        if w.endswith(suf) and len(w) - len(suf) >= 4:
+            w = w[: -len(suf)]
+            return SYNONYMS.get(w, w)
+    return w
+
+
+def tokens(text: str) -> list[str]:
+    return [stem(w) for w in re.findall(r"[a-z0-9&]+", text.lower()) if w not in STOP and len(w) > 1]
+
+
+def jaccard(a: str, b: str) -> float:
+    x, y = set(tokens(a)), set(tokens(b))
+    return len(x & y) / len(x | y) if x | y else 0.0
+
+
+def doc_tokens(r: Record) -> list[str]:
+    weighted = [r.get("Condition")] * 2 + [r.get("Scope")] * 2 + [r.get("Project")] * 2 + [
+        r.get("Action"), r.get("Constraints"), r.get("Said by"), r.get("Last decision"), r.get("Next step")]
+    return tokens(" ".join(weighted))
+
+
+def bm25(records: list[Record], query: str, k1: float = 1.2, b: float = 0.75) -> list[float]:
+    q = set(tokens(query))
+    docs = [doc_tokens(r) for r in records]
+    n = len(docs) or 1
+    avg = sum(len(d) for d in docs) / n or 1.0
+    df: dict[str, int] = {}
+    for d in docs:
+        for t in set(d):
+            df[t] = df.get(t, 0) + 1
+    scores = []
+    for d in docs:
+        tf: dict[str, int] = {}
+        for t in d:
+            tf[t] = tf.get(t, 0) + 1
+        s = 0.0
+        for t in q:
+            if t in tf:
+                idf = math.log(1 + (n - df[t] + 0.5) / (df[t] + 0.5))
+                s += idf * tf[t] * (k1 + 1) / (tf[t] + k1 * (1 - b + b * len(d) / avg))
+        scores.append(s)
+    return scores
+
+
+CALENDAR = set("""January February March April May June July August September October November December
+Monday Tuesday Wednesday Thursday Friday Saturday Sunday I""".split())
+
+
+def named_scope(r: Record) -> list[str]:
+    """Proper names in a record's trigger (Condition, or Project), e.g. a client or product: 'Kestrel Coffee'."""
+    text = r.get("Condition") or r.get("Project")
+    words = re.findall(r"[A-Za-z][A-Za-z0-9&'\-]*", text)
+    names = [w for w in words[1:] if w[0].isupper() and w not in CALENDAR] if r.get("Condition") else \
+        [w for w in words if w[0].isupper() and w not in CALENDAR]
+    return names
+
+
+def names_missing(r: Record, brief: str) -> list[str]:
+    """Names the record is scoped to, when none of them appear in the brief."""
+    names = named_scope(r)
+    low = brief.lower()
+    return [] if not names or any(n.lower() in low for n in names) else names
+
+
+def possible_conflict(a: Record, b: Record) -> bool:
+    """Same situation, overlapping but different instructions: likely the same decision made twice."""
+    if a.prefix == "proj" or b.prefix == "proj":
+        return False
+    return jaccard(a.get("Condition"), b.get("Condition")) >= 0.6 and 0.2 <= jaccard(a.get("Action"), b.get("Action")) < 0.8
+
+
+def winner(a: Record, b: Record) -> Record:
+    """Latest explicit correction wins: stated beats inferred, then the more recent date."""
+    ka = (STATUS_RANK.get(a.status, -1), a.date())
+    kb = (STATUS_RANK.get(b.status, -1), b.date())
+    return a if ka >= kb else b
+
+
+# --------------------------------------------------------------------------- validation
 
 @dataclass
 class Finding:
@@ -234,7 +392,7 @@ def validate(profile: Profile, today: dt.date | None = None) -> list[Finding]:
             required += RULE_REQUIRED
         required += EXTRA_REQUIRED.get(prefix, [])
         for key in required:
-            if key not in r.fields or (is_empty(r.fields[key]) and key not in {"Reason"}):
+            if key not in r.fields or (is_empty(r.fields[key]) and key != "Reason"):
                 findings.append(Finding("error", r.line, f"{r.id}: missing required field '{key}'"))
 
         status = r.status
@@ -262,9 +420,8 @@ def validate(profile: Profile, today: dt.date | None = None) -> list[Finding]:
         if src and upd and upd < src:
             findings.append(Finding("error", r.line, f"{r.id}: 'Updated' is earlier than 'Source date'"))
 
-        exp = parse_date(r.get("Expires"))
-        if exp and exp < today and status != "superseded":
-            findings.append(Finding("warning", r.line, f"{r.id}: expired on {exp}. Stop applying it, then mark it superseded or forget it"))
+        if is_expired(r, today) and status != "superseded":
+            findings.append(Finding("warning", r.line, f"{r.id}: expired on {r.get('Expires')}. Stop applying it, then mark it superseded or forget it"))
 
         sup = r.get("Supersedes")
         if sup and not is_empty(sup):
@@ -286,7 +443,7 @@ def validate(profile: Profile, today: dt.date | None = None) -> list[Finding]:
     for r in profile.records:
         if r.status == "superseded" or r.prefix == "proj":
             continue
-        key = (frozenset(r.sources()), norm_text(r.get("Condition")), norm_text(r.get("Action")))
+        key = (frozenset(s.lower() for s in r.sources()), norm_text(r.get("Condition")), norm_text(r.get("Action")))
         if not key[0]:
             continue
         if key in seen:
@@ -300,37 +457,17 @@ def norm_text(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
 
 
-SELF = {"", "user", "the user", "me", "self", "—", "-"}
+def validate_text(profile: Profile, today: dt.date | None = None) -> tuple[str, bool]:
+    findings = validate(profile, today)
+    errors = sum(f.level == "error" for f in findings)
+    out = [str(f) for f in findings]
+    out.append(f"{len(profile.records)} records, {errors} errors, {len(findings) - errors} warnings: {profile.path}")
+    return "\n".join(out), errors == 0
 
 
-def said_by_other(r: Record) -> bool:
-    return r.get("Said by").lower() not in SELF
+# --------------------------------------------------------------------------- rendering
 
-
-def is_active(r: Record, today: dt.date) -> bool:
-    if r.status == "superseded":
-        return False
-    exp = parse_date(r.get("Expires"))
-    return not (exp and exp < today)
-
-
-def select(profile: Profile, args, today: dt.date) -> list[Record]:
-    out = []
-    for r in profile.records:
-        if not getattr(args, "include_inactive", False) and not is_active(r, today):
-            continue
-        if args.type and r.prefix != (type_prefix(args.type) or args.type):
-            continue
-        blob = " ".join(r.fields.values()).lower()
-        if args.project and args.project.lower() not in blob:
-            continue
-        if args.query and args.query.lower() not in (blob + " " + r.id.lower()):
-            continue
-        out.append(r)
-    return out
-
-
-def render(r: Record, hide: set[str]) -> str:
+def render(r: Record, hide: set[str] = frozenset()) -> str:
     lines = [f"### {r.id} · {TYPES.get(r.prefix, r.type_label)}"]
     for k, v in r.fields.items():
         if k not in hide:
@@ -338,70 +475,150 @@ def render(r: Record, hide: set[str]) -> str:
     return "\n".join(lines)
 
 
-def cmd_validate(args) -> int:
-    profile = parse(resolve_path(args.profile))
-    findings = validate(profile)
-    for f in findings:
-        print(f)
-    errors = sum(f.level == "error" for f in findings)
-    warnings = len(findings) - errors
-    print(f"{len(profile.records)} records, {errors} errors, {warnings} warnings: {profile.path}")
-    return 1 if errors else 0
+def one_line(r: Record, today: dt.date) -> str:
+    """Compact form for recall: everything an agent needs to apply the record, nothing else."""
+    head = f"- **{r.id}** · {r.status or '?'} · {r.get('Updated') or r.get('Source date')}"
+    if r.prefix == "proj":
+        body = f"{r.get('Project')}. Latest: {r.get('Latest version')}. Last decision: {r.get('Last decision')}. Next: {r.get('Next step')}"
+        if not is_empty(r.get("Constraints")):
+            body += f". Constraints: {r.get('Constraints')}"
+        return f"{head}: {body}"
+    body = f"{r.get('Condition')} → {r.get('Action')}. Scope: {r.get('Scope')}"
+    if said_by_other(r):
+        body += f". Said by: {r.get('Said by')}"
+    if not is_empty(r.get("Exceptions")) and r.get("Exceptions").lower() != "none known":
+        body += f". Exceptions: {r.get('Exceptions')}"
+    if not is_empty(r.get("Expires")):
+        body += f". Expires: {r.get('Expires')}"
+    reason = r.get("Reason")
+    body += f". Reason: {reason or 'unknown'}"
+    return f"{head}: {body}"
 
 
-def cmd_show(args) -> int:
-    today = dt.date.today()
-    profile = parse(resolve_path(args.profile))
-    records = select(profile, args, today)
-    if not records:
-        print("No matching active records.")
-        return 0
-    others = [r for r in records if said_by_other(r)]
-    stated = [r for r in records if r.status not in INFERRED and not said_by_other(r)]
-    inferred = [r for r in records if r.status in INFERRED and not said_by_other(r)]
-    groups = (
-        ("Stated by you", stated),
-        ("Inferred: correct me if wrong", inferred),
-        ("Said by others: applied only within their scope", others),
-    )
-    for title, group in groups:
-        if not group:
+# --------------------------------------------------------------------------- recall
+
+def recall_data(profile: Profile, brief: str, k: int = 8, today: dt.date | None = None) -> dict:
+    today = today or dt.date.today()
+    recs = [r for r in profile.records if r.get("Sensitivity").lower() != "sensitive" or r.prefix == "sens"]
+    scores = bm25(recs, brief)
+    q = set(tokens(brief))
+    ranked = sorted(zip(scores, range(len(recs))), key=lambda x: (-x[0], x[1]))
+    top = ranked[0][0] if ranked else 0.0
+    threshold = max(top * 0.3, 1e-9)
+    active, inactive = [], []
+    for s, i in ranked:
+        r = recs[i]
+        # A record is triggered when the brief covers most of its Condition. Missing a triggered rule is worse
+        # than showing an extra one, so triggered records are kept even when another record scores far higher.
+        cond = set(tokens(r.get("Condition") or r.get("Project")))
+        triggered = bool(cond) and len(cond & q) / len(cond) >= 0.5
+        if s <= 0:
             continue
-        print(f"## {title}\n")
-        for r in group:
-            print(render(r, set()) + "\n")
-    return 0
+        strong = triggered or s >= threshold
+        (active if is_active(r, today) else inactive).append((s, strong, r))
+    # Keep every triggered or strong record (bounded), then fill up to k with the best positive matches,
+    # so one dominant record can never hide the rest of a small profile.
+    trig = [x for x in active if x[1]][: 3 * k]
+    rest = [x for x in active if not x[1]][: max(0, k - len(trig))]
+    inactive = [x for x in inactive if x[1]]
+    active = sorted(trig + rest, key=lambda x: -x[0])
+    active = [(s, r) for s, _, r in active]
+    inactive = [(s, r) for s, _, r in inactive][:k]
+    chosen = [r for _, r in active]
+
+    groups = {"stated": [], "inferred": [], "others": [], "project": [], "elsewhere": []}
+    for r in chosen:
+        if names_missing(r, brief):
+            groups["elsewhere"].append(r)
+        elif r.prefix == "proj":
+            groups["project"].append(r)
+        elif said_by_other(r):
+            groups["others"].append(r)
+        elif r.status in INFERRED:
+            groups["inferred"].append(r)
+        else:
+            groups["stated"].append(r)
+
+    conflicts = []
+    own = [r for r in chosen if r.prefix != "proj" and not said_by_other(r) and not names_missing(r, brief)]
+    for i, a in enumerate(own):
+        for b in own[i + 1:]:
+            if possible_conflict(a, b):
+                w = winner(a, b)
+                conflicts.append({"records": [a.id, b.id], "use": w.id,
+                                  "why": f"{w.status}, {w.get('Updated') or w.get('Source date')}"})
+
+    by_id = profile.by_id()
+    excluded = []
+    for _, r in inactive:
+        if r.status == "superseded":
+            newer = [x.id for x in profile.records if r.id in [s.strip() for s in re.split(r"[,;]", x.get("Supersedes"))]]
+            excluded.append({"id": r.id, "why": "superseded" + (f" by {', '.join(newer)}" if newer else "")})
+        else:
+            excluded.append({"id": r.id, "why": f"expired {r.get('Expires')}"})
+    # A matched record that replaces another should also flag what it replaced, even if that scored low.
+    for r in chosen:
+        for old in (s.strip() for s in re.split(r"[,;]", r.get("Supersedes")) if s.strip() and not is_empty(s)):
+            if old in by_id and old not in {e["id"] for e in excluded}:
+                excluded.append({"id": old, "why": f"superseded by {r.id}"})
+
+    return {
+        "brief": brief,
+        "profile": str(profile.path),
+        "date": today.isoformat(),
+        "total_records": len(profile.records),
+        "matched": len(chosen),
+        "groups": {g: [{"id": r.id, "line": one_line(r, today)} for r in rs] for g, rs in groups.items()},
+        "conflicts": conflicts,
+        "excluded": excluded,
+    }
 
 
-def cmd_export(args) -> int:
-    today = dt.date.today()
-    profile = parse(resolve_path(args.profile))
-    records = select(profile, args, today)
-    if not args.include_sensitive:
-        records = [r for r in records if r.get("Sensitivity").lower() != "sensitive"]
-    hide = set() if args.include_sources else PRIVATE_FIELDS
+def recall_text(profile: Profile, brief: str, k: int = 8, today: dt.date | None = None) -> str:
+    d = recall_data(profile, brief, k, today)
     out = [
-        "# Mini Me working preferences (export)",
-        "",
-        f"Snapshot taken {today.isoformat()}. It does not update itself: re-export to refresh.",
-        "Status: confirmed = stated by the user; likely = 2+ independent sources; tentative = one example.",
-        "Apply each record only within its Scope.",
+        "# Mini Me recall",
+        f"Brief: {d['brief']}",
+        f"{d['matched']} of {d['total_records']} records matched · {d['date']}",
+        "Precedence: today's request > the client's or audience's stated requirements > records below.",
+        "Apply each record only inside its Scope.",
         "",
     ]
-    out += [render(r, hide) + "\n" for r in records]
-    text = "\n".join(out)
-    if args.output:
-        Path(args.output).write_text(text, encoding="utf-8")
-        print(f"Exported {len(records)} records to {args.output}")
-    else:
-        print(text)
-    return 0
+    titles = {
+        "stated": "Apply: stated by the user",
+        "inferred": "Apply with care: inferred, say so in the reply",
+        "others": "Others' constraints: only if the deliverable is inside their scope",
+        "project": "Project state",
+        "elsewhere": "Check scope: names a client, product or project not in the brief. Apply only if it really covers this task",
+    }
+    for g, title in titles.items():
+        if d["groups"][g]:
+            out.append(f"## {title}")
+            out += [x["line"] for x in d["groups"][g]]
+            out.append("")
+    if d["conflicts"]:
+        out.append("## Possible conflicts: same situation, different instructions")
+        for c in d["conflicts"]:
+            out.append(f"- {' vs '.join(c['records'])} → use **{c['use']}** ({c['why']}: latest explicit correction wins). "
+                       f"Check that both describe the same decision")
+        out.append("")
+    if d["excluded"]:
+        out.append("## Do not apply")
+        out += [f"- {e['id']}: {e['why']}" for e in d["excluded"]]
+        out.append("")
+    if not d["matched"]:
+        out.append("No records match this brief. Work from the request and make consequential assumptions visible.")
+    return "\n".join(out).rstrip() + "\n"
 
 
-def atomic_write(path: Path, text: str, expected_digest: str) -> None:
-    current = hashlib.sha256(path.read_text(encoding="utf-8").encode()).hexdigest()
-    if current != expected_digest:
-        raise RuntimeError("profile changed while editing. Re-read it and apply only the intended change")
+# --------------------------------------------------------------------------- writes
+
+def atomic_write(path: Path, text: str, expected_digest: str | None) -> None:
+    if expected_digest is not None:
+        current = hashlib.sha256(path.read_text(encoding="utf-8").encode()).hexdigest() if path.exists() else None
+        if current != expected_digest:
+            raise MiniMeError("profile changed while editing. Re-read it and apply only the intended change")
+    path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".mini-me-", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
@@ -413,63 +630,380 @@ def atomic_write(path: Path, text: str, expected_digest: str) -> None:
         raise
 
 
-def cmd_forget(args) -> int:
-    path = resolve_path(args.profile)
+def set_field(lines: list[str], r: Record, key: str, value: str) -> None:
+    """Set a field in place inside the record's line span, inserting it if missing."""
+    last_field = r.line - 1
+    for i in range(r.line, r.end_line):
+        m = FIELD_RE.match(lines[i].strip())
+        if m:
+            last_field = i
+            if normalize_key(m.group("key")) == key:
+                lines[i] = f"- {key}: {value}"
+                r.fields[key] = value
+                return
+    lines.insert(last_field + 1, f"- {key}: {value}")
+    r.fields[key] = value
+
+
+def next_id(profile: Profile | None, prefix: str) -> str:
+    nums = [0]
+    for r in (profile.records if profile else []):
+        m = ID_RE.match(r.id)
+        if m and m.group("prefix") == prefix:
+            nums.append(int(m.group("num")))
+    return f"{prefix}-{max(nums) + 1:03d}"
+
+
+def commit(path: Path, new_text: str, digest: str | None, today: dt.date) -> None:
+    """Validate the would-be file first; write only if it has no errors."""
+    candidate = parse_text(new_text, path)
+    errors = [f for f in validate(candidate, today) if f.level == "error"]
+    if errors:
+        raise MiniMeError("not saved, the result would be invalid:\n" + "\n".join(str(f) for f in errors))
+    atomic_write(path, new_text, digest)
+
+
+def add_record(path: Path, fields: dict[str, str], today: dt.date | None = None) -> str:
+    """Add a record, or merge it into the existing record for the same decision.
+
+    Merging is how evidence compounds: a second independent source promotes 'tentative' to 'likely'.
+    """
+    today = today or dt.date.today()
+    fields = {normalize_key(k): str(v).strip() for k, v in fields.items() if v is not None and str(v).strip()}
+    raw_type = fields.pop("Type", "")
+    prefix = type_prefix(raw_type)
+    if prefix is None:
+        raise MiniMeError(f"unknown type '{raw_type}'. Use one of {sorted(TYPES)}")
+    fields.setdefault("Reason", "unknown")
+    fields.setdefault("Source date", today.isoformat())
+    fields.setdefault("Updated", today.isoformat())
+    fields.setdefault("Supersedes", "—")
+    fields.setdefault("Sensitivity", "sensitive" if prefix == "sens" else "ordinary")
+    fields.setdefault("Status", "tentative")
+    if prefix != "proj":
+        fields.setdefault("Exceptions", "none known")
+    fields["Status"] = fields["Status"].lower()
+
+    exists = path.exists()
+    profile = parse(path) if exists else None
+    text = profile.text if profile else "# Mini Me profile\n\n<!-- PRIVATE. Keep this file out of shared repositories. -->\n\n## Records\n"
+    lines = text.splitlines()
+
+    # 1. Same decision already recorded: merge sources instead of duplicating.
+    if profile and prefix != "proj":
+        for r in profile.records:
+            if (r.prefix == prefix and is_active(r, today)
+                    and norm_text(r.get("Condition")) == norm_text(fields.get("Condition", ""))
+                    and norm_text(r.get("Action")) == norm_text(fields.get("Action", ""))):
+                new_sources = [s.strip() for s in re.split(r"[,;]", fields.get("Sources", "")) if s.strip()]
+                have = {s.lower() for s in r.sources()}
+                added = [s for s in new_sources if s.lower() not in have]
+                old_status = r.status
+                status = max([old_status, fields["Status"]], key=lambda s: STATUS_RANK.get(s, -1))
+                if status == "tentative" and len(have) + len(added) >= 2:
+                    status = "likely"
+                if not added and status == old_status:
+                    return f"Already recorded as {r.id}. No change."
+                if added:
+                    set_field(lines, r, "Sources", ", ".join(r.sources() + added))
+                    ev = fields.get("Evidence")
+                    if ev and ev not in r.get("Evidence"):
+                        set_field(lines, r, "Evidence", f"{r.get('Evidence')} | {ev}")
+                if fields.get("Reason", "unknown") != "unknown" and r.get("Reason").lower() in {"", "unknown"}:
+                    set_field(lines, r, "Reason", fields["Reason"])
+                set_field(lines, r, "Status", status)
+                set_field(lines, r, "Updated", today.isoformat())
+                commit(path, "\n".join(lines) + "\n", profile.digest, today)
+                msg = f"Merged into {r.id} (sources: {', '.join(r.sources())})."
+                if status != old_status:
+                    msg += f" Status {old_status} → {status}."
+                return msg
+
+    # 2. New record. Mark what it replaces.
+    rid = next_id(profile, prefix)
+    sup = fields.get("Supersedes", "—")
+    if profile and not is_empty(sup):
+        by_id = profile.by_id()
+        for old in (s.strip() for s in re.split(r"[,;]", sup) if s.strip()):
+            if old not in by_id:
+                raise MiniMeError(f"supersedes unknown record '{old}'")
+            # Edit from the bottom up so earlier line numbers stay valid.
+        for old in sorted((by_id[s.strip()] for s in re.split(r"[,;]", sup) if s.strip()), key=lambda r: -r.line):
+            set_field(lines, old, "Status", "superseded")
+            set_field(lines, old, "Updated", today.isoformat())
+    ordered = [k for k in FIELD_ORDER if k in fields] + [k for k in fields if k not in FIELD_ORDER]
+    block = [f"### {rid} · {TYPES[prefix]}"] + [f"- {k}: {fields[k]}" for k in ordered]
+    new_text = "\n".join(lines).rstrip("\n") + "\n\n" + "\n".join(block) + "\n"
+    commit(path, new_text, profile.digest if profile else None, today)
+    return f"Added {rid}." + (f" Marked {sup} superseded." if not is_empty(sup) else "")
+
+
+def forget_record(path: Path, rid: str) -> str:
     profile = parse(path)
-    targets = [r for r in profile.records if r.id == args.id]
+    targets = [r for r in profile.records if r.id == rid]
     if not targets:
-        print(f"No record '{args.id}'.", file=sys.stderr)
-        return 1
-    drop: set[int] = set()
-    for r in targets:
-        drop.update(range(r.line - 1, r.end_line))
+        raise MiniMeError(f"no record '{rid}'")
     lines = list(profile.lines)
     cleared = []
     for r in profile.records:
-        sup = r.get("Supersedes")
-        if args.id in [s.strip() for s in re.split(r"[,;]", sup)]:
-            for i in range(r.line - 1, r.end_line):
-                if FIELD_RE.match(lines[i].strip()) and normalize_key(FIELD_RE.match(lines[i].strip()).group("key")) == "Supersedes":
-                    rest = [s.strip() for s in re.split(r"[,;]", sup) if s.strip() and s.strip() != args.id]
-                    lines[i] = re.sub(r"(:\s*).*$", lambda m: m.group(1) + (", ".join(rest) or "—"), lines[i])
-                    cleared.append(r.id)
+        refs = [s.strip() for s in re.split(r"[,;]", r.get("Supersedes")) if s.strip()]
+        if rid in refs:
+            rest = [s for s in refs if s != rid]
+            set_field(lines, r, "Supersedes", ", ".join(rest) or "—")
+            cleared.append(r.id)
+    drop: set[int] = set()
+    for r in targets:
+        drop.update(range(r.line - 1, r.end_line))
     kept = [ln for i, ln in enumerate(lines) if i not in drop]
     text = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).rstrip("\n") + "\n"
-    if args.dry_run:
-        print(f"Would remove {args.id}" + (f" and clear references in {', '.join(cleared)}" if cleared else ""))
-        return 0
     atomic_write(path, text, profile.digest)
-    after = parse(path)
-    if any(r.id == args.id for r in after.records):
-        print("Forget failed: record still present.", file=sys.stderr)
-        return 1
-    print(f"Removed {args.id} from {path}." + (f" Cleared references in {', '.join(cleared)}." if cleared else ""))
-    print("Not reached by this tool: earlier exports, the original sources, and copies held by other agents or hosts.")
+    if any(r.id == rid for r in parse(path).records):
+        raise MiniMeError("forget failed: record still present")
+    msg = f"Removed {rid} from {path}."
+    if cleared:
+        msg += f" Cleared references in {', '.join(cleared)}."
+    return msg + "\nNot reached by this tool: earlier exports, the original sources, and copies held by other agents or hosts."
+
+
+# --------------------------------------------------------------------------- review
+
+def review_text(profile: Profile, today: dt.date | None = None, stale_days: int = 180) -> str:
+    """Suggest maintenance. Never applies anything: the user decides."""
+    today = today or dt.date.today()
+    active = [r for r in profile.records if is_active(r, today) and r.prefix != "proj"]
+    items = []
+
+    for r in active:
+        if r.status == "tentative" and len(r.sources()) >= 2:
+            items.append(f"Promote {r.id} to likely: {len(r.sources())} independent sources.")
+    seen_pairs = set()
+    for i, a in enumerate(active):
+        for b in active[i + 1:]:
+            if a.prefix != b.prefix or said_by_other(a) or said_by_other(b):
+                continue
+            same_cond = jaccard(a.get("Condition"), b.get("Condition")) >= 0.6
+            act = jaccard(a.get("Action"), b.get("Action"))
+            if same_cond and act >= 0.8 and {s.lower() for s in a.sources()} != {s.lower() for s in b.sources()}:
+                items.append(f"Merge {a.id} + {b.id}: same decision from different sources → one record, status likely or better.")
+                seen_pairs.add((a.id, b.id))
+            elif possible_conflict(a, b):
+                w = winner(a, b)
+                loser = b if w is a else a
+                items.append(f"Conflict {a.id} vs {b.id}: same situation, different instructions. Latest explicit correction is "
+                             f"{w.id}. Ask the user, or mark {loser.id} superseded by {w.id}.")
+    for r in profile.records:
+        if r.status != "superseded" and is_expired(r, today):
+            items.append(f"Retire {r.id}: expired {r.get('Expires')}. Mark it superseded or forget it.")
+    for r in active:
+        src = parse_date(r.get("Source date"))
+        if r.status == "tentative" and len(r.sources()) < 2 and src and (today - src).days > stale_days:
+            items.append(f"Check {r.id}: tentative for {(today - src).days} days on one example. Ask the user once, or forget it.")
+        if r.status in {"confirmed", "likely"} and r.get("Scope").lower() in {"all", "everything", "any", "all work", "always"}:
+            items.append(f"Narrow {r.id}: scope '{r.get('Scope')}' is unbounded. Name the work it applies to.")
+    if not items:
+        return f"Nothing to review in {len(profile.records)} records."
+    return f"# Mini Me review: {len(items)} suggestion(s), nothing applied\n\n" + "\n".join(f"{i}. {t}" for i, t in enumerate(items, 1))
+
+
+# --------------------------------------------------------------------------- read-only views
+
+def select(profile: Profile, today: dt.date, rtype: str | None = None, project: str | None = None,
+           query: str | None = None, include_inactive: bool = False) -> list[Record]:
+    out = []
+    want = (type_prefix(rtype) or rtype) if rtype else None
+    for r in profile.records:
+        if not include_inactive and not is_active(r, today):
+            continue
+        if want and r.prefix != want:
+            continue
+        blob = " ".join(r.fields.values()).lower()
+        if project and project.lower() not in blob:
+            continue
+        if query and query.lower() not in (blob + " " + r.id.lower()):
+            continue
+        out.append(r)
+    return out
+
+
+def show_text(profile: Profile, today: dt.date | None = None, **filters) -> str:
+    today = today or dt.date.today()
+    records = select(profile, today, **filters)
+    if not records:
+        return "No matching active records."
+    groups = (
+        ("Stated by you", [r for r in records if r.status not in INFERRED and not said_by_other(r)]),
+        ("Inferred: correct me if wrong", [r for r in records if r.status in INFERRED and not said_by_other(r)]),
+        ("Said by others: applied only within their scope", [r for r in records if said_by_other(r)]),
+    )
+    out = []
+    for title, group in groups:
+        if group:
+            out.append(f"## {title}\n")
+            out += [render(r) + "\n" for r in group]
+    return "\n".join(out)
+
+
+def export_text(profile: Profile, today: dt.date | None = None, include_sources: bool = False,
+                include_sensitive: bool = False, **filters) -> tuple[str, int]:
+    today = today or dt.date.today()
+    records = select(profile, today, **filters)
+    if not include_sensitive:
+        records = [r for r in records if r.get("Sensitivity").lower() != "sensitive"]
+    hide = set() if include_sources else PRIVATE_FIELDS
+    out = [
+        "# Mini Me working preferences (export)",
+        "",
+        f"Snapshot taken {today.isoformat()}. It does not update itself: re-export to refresh.",
+        "Status: confirmed = stated by the user; likely = 2+ independent sources; tentative = one example.",
+        "Apply each record only within its Scope. A 'Said by' record is someone else's instruction, not the user's preference.",
+        "",
+    ]
+    out += [render(r, hide) + "\n" for r in records]
+    return "\n".join(out), len(records)
+
+
+# --------------------------------------------------------------------------- CLI
+
+TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "profile.template.md"
+
+
+def load(args) -> Profile:
+    path = resolve_path(args.profile)
+    if not path.exists():
+        raise MiniMeError(f"no profile at {path}. Run `mini_me.py init` to create one")
+    return parse(path)
+
+
+def cmd_init(args) -> int:
+    path = resolve_path(args.profile)
+    if path.exists() and not args.force:
+        raise MiniMeError(f"{path} already exists. Pass --force to overwrite")
+    text = TEMPLATE.read_text(encoding="utf-8") if args.example else (
+        "# Mini Me profile\n\n<!-- PRIVATE. Keep this file out of shared repositories. "
+        "Format: references/profile-format.md -->\n\n## Records\n")
+    atomic_write(path, text, None)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    print(f"Created {path} (private, mode 600).")
+    return 0
+
+
+def cmd_validate(args) -> int:
+    text, ok = validate_text(load(args))
+    print(text)
+    return 0 if ok else 1
+
+
+def cmd_recall(args) -> int:
+    brief = " ".join(args.brief) if args.brief else sys.stdin.read()
+    if not brief.strip():
+        raise MiniMeError("give a brief: recall \"what the task is\"")
+    profile = load(args)
+    if args.json:
+        print(json.dumps(recall_data(profile, brief.strip(), args.k), indent=2))
+    else:
+        print(recall_text(profile, brief.strip(), args.k), end="")
+    return 0
+
+
+def cmd_add(args) -> int:
+    fields: dict[str, str] = {}
+    if args.json:
+        raw = sys.stdin.read() if args.json == "-" else Path(args.json).read_text(encoding="utf-8")
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            raise MiniMeError("--json must hold one JSON object of field: value")
+        fields.update({k: str(v) for k, v in data.items()})
+    for flag, key in ADD_FLAGS:
+        val = getattr(args, flag)
+        if val is not None:
+            fields[key] = val
+    if args.type:
+        fields["Type"] = args.type
+    print(add_record(resolve_path(args.profile), fields))
+    return 0
+
+
+def cmd_review(args) -> int:
+    print(review_text(load(args), stale_days=args.stale_days))
+    return 0
+
+
+def cmd_show(args) -> int:
+    print(show_text(load(args), rtype=args.type, project=args.project, query=args.query,
+                    include_inactive=args.include_inactive))
+    return 0
+
+
+def cmd_export(args) -> int:
+    text, n = export_text(load(args), include_sources=args.include_sources, include_sensitive=args.include_sensitive,
+                          rtype=args.type, project=args.project, query=args.query, include_inactive=args.include_inactive)
+    if args.output:
+        Path(args.output).write_text(text, encoding="utf-8")
+        print(f"Exported {n} records to {args.output}")
+    else:
+        print(text)
+    return 0
+
+
+def cmd_forget(args) -> int:
+    path = resolve_path(args.profile)
+    profile = load(args)
+    if args.dry_run:
+        if not any(r.id == args.id for r in profile.records):
+            raise MiniMeError(f"no record '{args.id}'")
+        print(f"Would remove {args.id}.")
+        return 0
+    print(forget_record(path, args.id))
     return 0
 
 
 def cmd_next_id(args) -> int:
     prefix = type_prefix(args.prefix) or args.prefix
     if prefix not in TYPES:
-        print(f"Unknown prefix '{args.prefix}'. Use one of {sorted(TYPES)}", file=sys.stderr)
-        return 1
+        raise MiniMeError(f"unknown prefix '{args.prefix}'. Use one of {sorted(TYPES)}")
     path = resolve_path(args.profile)
-    nums = [0]
-    if path.exists():
-        for r in parse(path).records:
-            m = ID_RE.match(r.id)
-            if m and m.group("prefix") == prefix:
-                nums.append(int(m.group("num")))
-    print(f"{prefix}-{max(nums) + 1:03d}")
+    print(next_id(parse(path) if path.exists() else None, prefix))
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+ADD_FLAGS = [
+    ("condition", "Condition"), ("action", "Action"), ("scope", "Scope"), ("exceptions", "Exceptions"),
+    ("evidence", "Evidence"), ("sources", "Sources"), ("reason", "Reason"), ("status", "Status"),
+    ("source_date", "Source date"), ("said_by", "Said by"), ("expires", "Expires"), ("purpose", "Purpose"),
+    ("supersedes", "Supersedes"), ("project", "Project"), ("constraints", "Constraints"),
+    ("latest_version", "Latest version"), ("last_decision", "Last decision"), ("completed", "Completed"),
+    ("next_step", "Next step"), ("sensitivity", "Sensitivity"),
+]
+
+
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="mini_me", description=__doc__.splitlines()[0])
     p.add_argument("--profile", help="profile path (default: $MINI_ME_PROFILE or ~/.mini-me/profile.md)")
+    p.add_argument("--version", action="version", version=f"mini_me {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    ip = sub.add_parser("init", help="create a private profile")
+    ip.add_argument("--example", action="store_true", help="start from the example template")
+    ip.add_argument("--force", action="store_true")
+
     sub.add_parser("validate", help="check the profile; exit 1 on errors")
+
+    rp = sub.add_parser("recall", help="the records relevant to a task brief, compact")
+    rp.add_argument("brief", nargs="*", help="task brief (or pipe it on stdin)")
+    rp.add_argument("-k", type=int, default=8, help="max active records (default 8)")
+    rp.add_argument("--json", action="store_true")
+
+    ap = sub.add_parser("add", help="add a record, or merge it into the same decision")
+    ap.add_argument("--type", help="goal, pref, rule, method, exc, sens, proj")
+    ap.add_argument("--json", help="JSON object of fields, from a file or '-' for stdin")
+    for flag, key in ADD_FLAGS:
+        ap.add_argument("--" + flag.replace("_", "-"), dest=flag, help=key)
+
+    rv = sub.add_parser("review", help="suggest promotions, merges, conflicts, retirements")
+    rv.add_argument("--stale-days", type=int, default=180)
 
     for name in ("show", "export"):
         sp = sub.add_parser(name)
@@ -488,24 +1022,20 @@ def main(argv: list[str] | None = None) -> int:
 
     np_ = sub.add_parser("next-id", help="print the next free ID for a prefix")
     np_.add_argument("prefix")
+    return p
 
-    args = p.parse_args(argv)
-    path = resolve_path(args.profile)
-    if args.cmd != "next-id" and not path.exists():
-        print(f"No profile at {path}. Copy templates/profile.template.md there to start.", file=sys.stderr)
-        return 2
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     handler = {
-        "validate": cmd_validate,
-        "show": cmd_show,
-        "export": cmd_export,
-        "forget": cmd_forget,
-        "next-id": cmd_next_id,
+        "init": cmd_init, "validate": cmd_validate, "recall": cmd_recall, "add": cmd_add, "review": cmd_review,
+        "show": cmd_show, "export": cmd_export, "forget": cmd_forget, "next-id": cmd_next_id,
     }[args.cmd]
     try:
         return handler(args)
-    except RuntimeError as exc:
+    except MiniMeError as exc:
         print(f"Error: {exc}", file=sys.stderr)
-        return 1
+        return 2 if "no profile at" in str(exc) else 1
 
 
 if __name__ == "__main__":

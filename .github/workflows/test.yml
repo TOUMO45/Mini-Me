@@ -1,0 +1,31 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Engine and MCP tests
+        run: python -m unittest discover -s skills/mini-me/scripts -v
+      - name: A/B harness tests
+        run: python -m unittest discover -s eval -v
+      - name: Scale benchmark (fails if recall misses a relevant record or a trap)
+        run: python eval/bench_scale.py
+      - name: Fixtures and template are valid
+        run: |
+          python skills/mini-me/scripts/mini_me.py --profile skills/mini-me/templates/profile.template.md validate
+          python skills/mini-me/scripts/mini_me.py --profile eval/scenarios/s3-corrected-rule/profile.md validate
+          python skills/mini-me/scripts/mini_me.py --profile eval/scenarios/s4-large-profile/profile.md validate

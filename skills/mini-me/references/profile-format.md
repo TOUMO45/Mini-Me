@@ -5,6 +5,8 @@ The profile is a private Markdown file. It holds records only, not these skill i
 **Location** (first match wins): the path the user names → `$MINI_ME_PROFILE` → `~/.mini-me/profile.md`.
 Never commit it to a shared repository. Start from `templates/profile.template.md`.
 
+Prefer `mini_me.py add` to hand-editing. It assigns the ID, merges duplicates, promotes evidence, and validates before writing. If you edit by hand, run `validate` afterwards.
+
 ## Record shape
 
 One `###` heading per record, then one `- Field: value` bullet per field.

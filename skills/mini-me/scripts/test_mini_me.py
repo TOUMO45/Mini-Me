@@ -223,7 +223,7 @@ class TestCommands(Base):
         self.write(record())
         profile = mini_me.parse(self.path)
         self.path.write_text(self.path.read_text() + "\n" + record(rid="rule-002", Sources="other"))
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(mini_me.MiniMeError):
             mini_me.atomic_write(self.path, "x", profile.digest)
         self.assertIn("rule-002", self.path.read_text())
 
@@ -242,3 +242,155 @@ class TestCommands(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+S4 = Path(__file__).resolve().parents[3] / "eval" / "scenarios" / "s4-large-profile" / "profile.md"
+S4_BRIEF = ("draft the proposal for Halden Shipping, a new client. Scope is fixed and well-defined: a 6-week "
+            "route-planning audit. Their procurement team will review it before signing.")
+
+
+@unittest.skipUnless(S4.exists(), "S4 fixture not present")
+class TestRecallS4(unittest.TestCase):
+    """Regression: recall must surface every relevant record and every trap in the 61-record profile."""
+
+    def setUp(self):
+        self.d = mini_me.recall_data(mini_me.parse(S4), S4_BRIEF, today=TODAY)
+        self.ids = {x["id"] for g in self.d["groups"].values() for x in g}
+
+    def test_finds_all_relevant_rules(self):
+        for rid in ("rule-011", "rule-014", "pref-004", "pref-021", "pref-009", "pref-017"):
+            self.assertIn(rid, self.ids)
+
+    def test_flags_traps(self):
+        excluded = {e["id"]: e["why"] for e in self.d["excluded"]}
+        self.assertIn("superseded by rule-011", excluded.get("rule-003", ""))
+        self.assertIn("expired", excluded.get("exc-002", ""))
+        self.assertNotIn("rule-003", self.ids)
+        self.assertNotIn("exc-002", self.ids)
+
+    def test_resolves_conflict_to_latest_explicit_correction(self):
+        found = [c for c in self.d["conflicts"] if set(c["records"]) == {"pref-009", "pref-021"}]
+        self.assertEqual(len(found), 1)
+        self.assertEqual((found[0]["use"], found[0]["why"]), ("pref-021", "confirmed, 2026-10-22"))
+
+    def test_tentative_records_are_marked(self):
+        inferred = {x["id"] for x in self.d["groups"]["inferred"]}
+        self.assertTrue({"pref-009", "pref-017"} <= inferred)
+
+    def test_much_smaller_than_profile(self):
+        text = mini_me.recall_text(mini_me.parse(S4), S4_BRIEF, today=TODAY)
+        self.assertLess(len(text), S4.stat().st_size / 5)
+
+    def test_other_client_record_is_not_in_apply(self):
+        profile = mini_me.parse(Path(__file__).resolve().parents[3] / "eval" / "scenarios" / "s3-corrected-rule" / "profile.md")
+        d = mini_me.recall_data(profile, "Landing-page design directions for Fjord Health, a new client", today=TODAY)
+        elsewhere = {x["id"] for x in d["groups"]["elsewhere"]}
+        applied = {x["id"] for x in d["groups"]["stated"] + d["groups"]["inferred"]}
+        self.assertIn("pref-001", elsewhere)
+        self.assertNotIn("pref-001", applied)
+        self.assertIn("rule-002", applied)
+        terse = mini_me.recall_data(profile, "Landing-page design directions for Fjord Health: calm, light, sans-serif",
+                                    today=TODAY)
+        self.assertIn("rule-002", {x["id"] for x in terse["groups"]["stated"]})
+        self.assertIn("rule-001", {e["id"] for e in terse["excluded"]})
+        same = mini_me.recall_data(profile, "Landing page for Kestrel Coffee", today=TODAY)
+        self.assertIn("pref-001", {x["id"] for x in same["groups"]["stated"]})
+
+    def test_unrelated_brief_matches_little(self):
+        d = mini_me.recall_data(mini_me.parse(S4), "plan my grocery shopping list", today=TODAY)
+        self.assertLessEqual(d["matched"], 2)
+
+
+class TestAdd(Base):
+    BASE = dict(Type="pref", Condition="When writing a client proposal", Action="Include a three-tier pricing table",
+                Scope="Client proposals", Evidence='"three tiers please"', Sources="chat-a")
+
+    def add(self, **kw):
+        return mini_me.add_record(self.path, {**self.BASE, **kw}, today=TODAY)
+
+    def test_creates_profile_and_record_with_defaults(self):
+        msg = self.add()
+        self.assertIn("Added pref-001", msg)
+        r = mini_me.parse(self.path).records[0]
+        self.assertEqual((r.status, r.get("Reason"), r.get("Updated")), ("tentative", "unknown", "2026-11-11"))
+        self.assertEqual(self.run_cli("validate")[0], 0)
+
+    def test_same_source_is_idempotent(self):
+        self.add()
+        self.assertIn("Already recorded as pref-001", self.add())
+        self.assertEqual(len(mini_me.parse(self.path).records), 1)
+
+    def test_second_source_promotes_to_likely(self):
+        self.add()
+        msg = self.add(Sources="chat-b", Evidence='"tiers again"')
+        self.assertIn("tentative → likely", msg)
+        r = mini_me.parse(self.path).records[0]
+        self.assertEqual(r.status, "likely")
+        self.assertEqual(r.sources(), ["chat-a", "chat-b"])
+        self.assertIn("tiers again", r.get("Evidence"))
+
+    def test_explicit_statement_upgrades_to_confirmed_and_fills_reason(self):
+        self.add()
+        self.add(Sources="chat-c", Status="confirmed", Reason="Buyers compare options")
+        r = mini_me.parse(self.path).records[0]
+        self.assertEqual((r.status, r.get("Reason")), ("confirmed", "Buyers compare options"))
+
+    def test_supersedes_marks_old_record(self):
+        self.add(Status="confirmed")
+        msg = self.add(Action="Include a two-tier pricing table", Sources="chat-z", Status="confirmed", Supersedes="pref-001")
+        self.assertIn("Added pref-002", msg)
+        recs = mini_me.parse(self.path).by_id()
+        self.assertEqual(recs["pref-001"].status, "superseded")
+        self.assertEqual(self.run_cli("validate")[0], 0)
+
+    def test_rejects_secret_and_leaves_file_untouched(self):
+        self.add()
+        before = self.path.read_text()
+        with self.assertRaises(mini_me.MiniMeError):
+            self.add(Condition="When logging in", Evidence="password is hunter2", Sources="chat-q")
+        self.assertEqual(self.path.read_text(), before)
+
+    def test_rejects_likely_on_one_source(self):
+        with self.assertRaises(mini_me.MiniMeError):
+            self.add(Status="likely")
+        self.assertFalse(self.path.exists())
+
+    def test_unknown_type_and_supersedes(self):
+        with self.assertRaises(mini_me.MiniMeError):
+            self.add(Type="vibe")
+        self.add()
+        with self.assertRaises(mini_me.MiniMeError):
+            self.add(Sources="x", Action="other", Supersedes="pref-999")
+
+    def test_cli_add_flags(self):
+        code, out, err = self.run_cli("add", "--type", "exc", "--condition", "When emailing Acme today",
+                                      "--action", "cc Priya", "--scope", "Acme", "--evidence", '"cc Priya today"',
+                                      "--sources", "chat-1", "--status", "confirmed", "--expires", "2026-11-11")
+        self.assertEqual(code, 0, err)
+        self.assertIn("Added exc-001", out)
+
+
+class TestReviewAndInit(Base):
+    def test_review_suggests_without_applying(self):
+        self.write(
+            record(rid="pref-001", typ="Preference", Action="Put all case studies at the end", Status="tentative",
+                   Sources="a", **{"Source date": "2026-01-01", "Updated": "2026-01-01"}),
+            record(rid="pref-002", typ="Preference", Action="Put one case study after the summary", Sources="b"),
+            record(rid="exc-001", typ="Exception", Sources="c", Action="Discount", Expires="2026-10-31"),
+        )
+        before = self.path.read_text()
+        out = mini_me.review_text(mini_me.parse(self.path), today=TODAY)
+        self.assertIn("Conflict pref-001 vs pref-002", out)
+        self.assertIn("Retire exc-001", out)
+        self.assertIn("Check pref-001", out)
+        self.assertEqual(self.path.read_text(), before)
+
+    def test_review_clean(self):
+        self.write(record())
+        self.assertIn("Nothing to review", mini_me.review_text(mini_me.parse(self.path), today=TODAY))
+
+    def test_init_creates_private_file_and_refuses_overwrite(self):
+        code, out, _ = self.run_cli("init")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.run_cli("init")[0], 1)
