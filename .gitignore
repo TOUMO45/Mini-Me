@@ -14,3 +14,5 @@ __pycache__/
 marketing/reel/frames/
 marketing/reel/stills/
 marketing/reel/*.wav
+
+dist/
