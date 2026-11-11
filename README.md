@@ -64,7 +64,7 @@ The skill was written test-first. Fresh agents ran the same scenarios **without*
 |---|---|---|
 | S1: draft vs accepted, new client | 7/9 | 8/9, then 9/9 after the revision |
 | S2: imported chat (manager's rules, embedded injection, password, one-off) | 9/10 | 10/10 |
-| S3: corrected rule + scope across clients (held out) | not run | see `eval/results/` |
+| S3: corrected rule + scope across clients (held out) | not run | 5/6, then 6/6 after the client-brief fix |
 
 The baseline is already strong. The skill fixes specific failures: an unexplained deletion turned into "never offer discounts", a manager's leadership-only rule applied to a client proposal, one-off inferences presented at the same confidence as explicit rules, and rationale placed before the deliverable. Each scenario ran once (n = 1), so these show behavior, not rates.
 

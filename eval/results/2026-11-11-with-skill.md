@@ -23,4 +23,14 @@ Found while using the tool on the S2 output: `show` listed Lena's record under "
 |---|---|---|
 | First run | 5/6 | Followed the corrected rule (two options plus a recommendation, superseded rule-001 ignored). Kept Kestrel's espresso/serif look out of Fjord's work. Created no duplicate. All 11 WCAG contrast ratios it reported were **independently recomputed and correct** (all pass AA). **3-4 (strict) fail**: it stored Fjord's brief as a `pref-` record. The record was attributed and scoped, but it describes the client, not the user |
 | Fix | — | The skill and format now send client briefs to the `Constraints` field of the project's `proj-` record |
-| Re-run | see below | |
+| Re-run | **6/6** | Fjord's brief went into `proj-001 · Constraints`, labeled "the client's requirement, not your own preference". It created no `pref-`/`rule-` records and said why: *"you haven't accepted or edited the directions yet"*. rule-002 was left unchanged, with no duplicate. All 8 contrast ratios were recomputed independently and are correct. It labeled its own recommendation as its judgment, not the user's criteria |
+
+## Summary
+
+| Scenario | Baseline | Final with skill |
+|---|---|---|
+| S1 | 7/9 | 9/9 |
+| S2 | 9/10 | 10/10 |
+| S3 (held out) | not run | 6/6 (5/6 before the client-brief fix) |
+
+n = 1 per cell. This shows the skill changes behavior on these cases. It does **not** measure how often, or prove fewer edits on your real work. Use `eval/ab.py` on held-out tasks for that.
