@@ -46,7 +46,7 @@ python3 skills/mini-me/scripts/mini_me.py add --type rule --condition "When writ
 python3 skills/mini-me/scripts/mini_me.py recall "Draft a proposal for a new client, fixed-scope audit"
 ```
 
-The profile lives at `~/.mini-me/profile.md`. Override it with `$MINI_ME_PROFILE` or `--profile`. Python 3.9+, standard library only.
+The profile lives at `~/.mini-me/profile.md`. Override it with `$MINI_ME_PROFILE` or `--profile`. Python 3.11+ (tested on 3.11, 3.12, 3.13), standard library only.
 
 ## Use it with your agent
 
