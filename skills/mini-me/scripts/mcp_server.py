@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 OR LicenseRef-MiniMe-Pro
+# Copyright 2026 TOUMO45. Free for noncommercial use; work use needs Mini Me Pro. See LICENSING.md.
 """Mini Me MCP server: exposes the profile engine as tools to any MCP-capable agent.
 
 Transport: stdio, newline-delimited JSON-RPC 2.0. Stdlib only.

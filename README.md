@@ -123,6 +123,17 @@ eval/                         scenarios, rubrics, results, A/B harness, scale be
 AGENTS.md  CHANGELOG.md  .github/workflows/test.yml
 ```
 
+## License
+
+**Free for personal and noncommercial use. Mini Me Pro for work.**
+
+| Use | License |
+|---|---|
+| Personal projects, learning, research, charities, schools, government | Free: [PolyForm Noncommercial 1.0.0](LICENSE.md) |
+| Your job, your business, client work | [Mini Me Pro](skills/mini-me/LICENSE-PRO.md): per-seat, commercial use, 12 months of updates (versions are yours to keep), support |
+
+Plain-language guide: [`skills/mini-me/LICENSING.md`](skills/mini-me/LICENSING.md). What you create with Mini Me is always yours.
+
 ## Privacy
 
 Your profile never belongs in this repository. `.gitignore` blocks `profile.md`, and `init` creates the file readable only by you. The engine refuses anything shaped like a password, token, or key, and reports it without echoing the value. Sensitive personal facts are stored only when you say what to keep and why.

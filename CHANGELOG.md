@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0 — 2026-11-11
+
+### Licensing
+- Dual license: free under the **PolyForm Noncommercial License 1.0.0** (official text, verified against SPDX), or under the **Mini Me Pro License 1.0** for work and client use.
+- `LICENSING.md`: a plain-language guide covering who needs Pro and what Pro includes.
+- SPDX headers in the scripts, a `license` field in SKILL.md, and a license notice from `init`.
+- `tools/package_skill.py` ships all three license files, writes the Pro purchase URL (`--pro-url`), and refuses to build if the PolyForm text was altered, the root and skill licenses differ, or a header is missing.
+
 ## 2.0.0 — 2026-11-11
 
 **Recall instead of rereading.** The agent loads the ~8 records that matter for today's task, not the whole profile. Per-task memory cost stays at ~570 tokens from 61 to 4,000 records (`eval/bench_scale.py`).

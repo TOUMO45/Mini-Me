@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 OR LicenseRef-MiniMe-Pro
+# Copyright 2026 TOUMO45. Free for noncommercial use; work use needs Mini Me Pro. See LICENSING.md.
 """Mini Me profile engine: recall, add, review, show, export, forget, validate, next-id, init.
 
 Stdlib only. The profile is a private Markdown file (see references/profile-format.md).
@@ -20,7 +22,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 TYPES = {
     "goal": "Goal",
@@ -887,6 +889,7 @@ def cmd_init(args) -> int:
     except OSError:
         pass
     print(f"Created {path} (private, mode 600).")
+    print("Mini Me is free for personal and noncommercial use. Work or client use needs Mini Me Pro: see LICENSING.md.")
     return 0
 
 

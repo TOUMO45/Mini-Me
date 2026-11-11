@@ -1,6 +1,7 @@
 ---
 name: mini-me
 description: Use when the user says "Mini Me", wants work done "my way" or the way they would do it, asks which option they would choose, asks to continue where they left off, shares a draft alongside the version they accepted, corrects or edits your output, or asks what has been learned about them or to correct, scope, forget, or export it.
+license: PolyForm-Noncommercial-1.0.0 OR LicenseRef-MiniMe-Pro. Free for personal use, work use needs Mini Me Pro. See LICENSING.md
 ---
 
 # Mini Me
