@@ -84,6 +84,8 @@ It refuses to store passwords or keys.
 Works with Claude Code, Cursor and any MCP agent.
 Python, zero dependencies.
 
+Free for personal use. Pro for work.
+
 Get Mini Me 👇
 [link]
 
