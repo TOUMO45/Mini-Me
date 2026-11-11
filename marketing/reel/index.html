@@ -1,0 +1,318 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mini Me Reel</title>
+<style>
+:root{--cream:#F9F4EA;--blue:#0029CE;--navy:#061545;--coral:#FE6639;--sky:#C9D3FA;--mute:#5B6478}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--cream);font-family:'Inter Display','Inter',sans-serif;-webkit-font-smoothing:antialiased;color:var(--navy)}
+.scene{position:absolute;inset:0;visibility:hidden;overflow:hidden}
+.a{position:absolute;will-change:transform,opacity}
+.h{font-weight:800;letter-spacing:-0.035em;line-height:1.02}
+.mono{font-family:'JetBrains Mono',monospace}
+.pill{display:inline-block;border-radius:999px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.card{background:#fff;border-radius:32px;box-shadow:0 24px 60px rgba(6,21,69,.16)}
+#wipe{position:absolute;left:0;top:0;width:1080px;height:1920px;z-index:50;transform:translateY(100%)}
+.strike{position:absolute;left:0;top:52%;height:6px;background:var(--coral);border-radius:3px;width:0}
+.tile{position:absolute;width:88px;height:56px;border-radius:12px;background:rgba(255,255,255,.16)}
+.row{position:absolute;left:96px;font-size:40px;font-weight:600;color:#fff;white-space:nowrap}
+.row .k{display:inline-block;width:64px;font-weight:800}
+</style>
+</head>
+<body>
+
+<!-- S1 HOOK ------------------------------------------------------------ -->
+<section class="scene" id="s1" style="background:var(--navy)">
+  <div class="a h" id="s1h" style="left:84px;top:250px;font-size:116px;color:#fff;width:900px">You fixed<br>this before.</div>
+  <div class="a card" id="s1card" style="left:84px;top:640px;width:912px;height:560px;padding:56px 60px">
+    <div class="pill" style="font-size:24px;color:var(--blue);background:#E8ECFD;padding:12px 22px">AI draft · client update</div>
+    <div style="margin-top:44px;font-size:44px;font-weight:600">Hi Dana,</div>
+    <div style="margin-top:30px;height:22px;width:720px;border-radius:11px;background:#E6E8EF"></div>
+    <div style="margin-top:20px;height:22px;width:620px;border-radius:11px;background:#E6E8EF"></div>
+    <div style="margin-top:40px;font-size:44px;font-weight:600">Best regards,</div>
+    <div style="position:relative;height:60px;margin-top:8px">
+      <span id="s1old" style="position:absolute;left:0;top:0;font-size:44px;font-weight:600">The Team<span class="strike" id="s1strike"></span></span>
+      <span id="s1new" style="position:absolute;left:250px;top:0;font-size:44px;font-weight:800;color:var(--coral)"></span>
+    </div>
+  </div>
+  <div class="a pill" id="s1count" style="left:676px;top:604px;font-size:34px;background:var(--coral);color:#fff;padding:16px 30px;letter-spacing:.02em;text-transform:none">Fixed ×1</div>
+  <div class="a h" id="s1b" style="left:84px;top:1270px;font-size:96px;color:#fff;width:920px">Your AI forgot.</div>
+  <div class="a h" id="s1c" style="left:84px;top:1374px;font-size:96px;color:var(--coral)">Again.</div>
+</section>
+
+<!-- S2 BRAND ----------------------------------------------------------- -->
+<section class="scene" id="s2" style="background:var(--cream)">
+  <img class="a" id="s2logo" src="logo_full.png" style="left:220px;top:470px;width:640px">
+  <div class="a h" id="s2t1" style="left:0;width:1080px;text-align:center;top:1110px;font-size:84px">Remembers how you work.</div>
+  <div class="a h" id="s2t2" style="left:0;width:1080px;text-align:center;top:1210px;font-size:84px;color:var(--coral)">And why.</div>
+</section>
+
+<!-- S3 LEARN ----------------------------------------------------------- -->
+<section class="scene" id="s3" style="background:var(--cream)">
+  <div class="a pill" id="s3p" style="left:84px;top:250px;font-size:28px;background:var(--blue);color:#fff;padding:14px 26px">1 · Learn</div>
+  <div class="a h" id="s3h" style="left:84px;top:330px;font-size:100px;width:920px">Learns from<br>your edits.</div>
+  <div class="a card" id="s3card" style="left:84px;top:600px;width:912px;height:330px;padding:40px 48px">
+    <div style="font-size:24px;font-weight:700;letter-spacing:.08em;color:var(--mute)">YOUR EDIT</div>
+    <div class="a" id="s3l1" style="left:48px;top:96px;font-size:38px;font-weight:600;white-space:nowrap">Hope you're having a great week!<span class="strike" id="s3strike"></span></div>
+    <div class="a" id="s3l2" style="left:48px;top:166px;font-size:38px;font-weight:600;white-space:nowrap">Progress: pipeline done, pilot live.</div>
+    <div class="a" id="s3l3" style="left:36px;top:236px;font-size:38px;font-weight:800;white-space:nowrap;padding:6px 12px;border-radius:12px">Decision needed: Marseille, by Fri.</div>
+  </div>
+  <div class="a" id="s3bub" style="left:184px;top:972px;width:812px;background:var(--navy);color:#fff;border-radius:36px 36px 8px 36px;padding:30px 40px;font-size:40px;font-weight:600">
+    <div style="font-size:22px;letter-spacing:.1em;color:var(--sky);font-weight:700;margin-bottom:8px">YOU</div><span id="s3type"></span>
+  </div>
+  <div class="a mono" id="s3rule" style="left:84px;top:1170px;width:912px;background:#fff;border:4px solid var(--blue);border-radius:28px;padding:30px 40px;font-size:34px;line-height:1.55">
+    <div id="s3r0"><b style="color:var(--blue)">rule-011</b> <span class="pill" style="font-family:'Inter Display';font-size:22px;background:#E5F6EC;color:#0D7A3E;padding:6px 16px;margin-left:10px;vertical-align:4px">confirmed</span></div>
+    <div id="s3r1"><span style="color:var(--mute)">WHEN</span> client update email</div>
+    <div id="s3r2"><span style="color:var(--mute)">DO  </span> put the decision first</div>
+    <div id="s3r3"><span style="color:var(--mute)">WHY </span> the reader skims</div>
+  </div>
+  <div class="a h" id="s3cap" style="left:84px;top:1490px;font-size:48px;width:920px;letter-spacing:-.02em">One edit + one reason → a rule it reuses.</div>
+</section>
+
+<!-- S4 SCOPE ----------------------------------------------------------- -->
+<section class="scene" id="s4" style="background:var(--blue)">
+  <div class="a pill" id="s4p" style="left:84px;top:250px;font-size:28px;background:#fff;color:var(--blue);padding:14px 26px">2 · Scope</div>
+  <div class="a h" id="s4h" style="left:84px;top:330px;font-size:96px;width:920px;color:#fff">Knows where each<br>lesson belongs.</div>
+  <div class="a card" id="s4c1" style="left:84px;top:600px;width:912px;height:220px;padding:38px 44px">
+    <div style="font-size:46px;font-weight:800">cc Priya on this email</div>
+    <div style="font-size:32px;color:var(--mute);margin-top:8px">You said: “today only”</div>
+  </div>
+  <div class="a pill" id="s4t1" style="left:560px;top:572px;font-size:24px;background:var(--coral);color:#fff;padding:12px 22px">One-off · expires today</div>
+  <div class="a card" id="s4c2" style="left:84px;top:860px;width:912px;height:220px;padding:38px 44px">
+    <div style="font-size:46px;font-weight:800">Use bullet points</div>
+    <div style="font-size:32px;color:var(--mute);margin-top:8px">Said by Lena, your manager</div>
+  </div>
+  <div class="a pill" id="s4t2" style="left:540px;top:832px;font-size:24px;background:var(--navy);color:#fff;padding:12px 22px">Her rule · leadership docs</div>
+  <div class="a card" id="s4c3" style="left:84px;top:1120px;width:912px;height:220px;padding:38px 44px">
+    <div style="font-size:46px;font-weight:800">Formal tone</div>
+    <div style="font-size:32px;color:var(--mute);margin-top:8px">From the Borealis brief</div>
+  </div>
+  <div class="a pill" id="s4t3" style="left:580px;top:1092px;font-size:24px;background:#FFD9CC;color:#9A2B0B;padding:12px 22px">Client · Borealis only</div>
+  <div class="a h" id="s4f" style="left:84px;top:1410px;font-size:58px;color:#fff;width:920px;letter-spacing:-.02em">Not every edit is a forever rule.</div>
+</section>
+
+<!-- S5 RECALL ---------------------------------------------------------- -->
+<section class="scene" id="s5" style="background:var(--navy)">
+  <div class="a pill" id="s5p" style="left:84px;top:250px;font-size:28px;background:var(--coral);color:#fff;padding:14px 26px">3 · Recall</div>
+  <div class="a h" id="s5h" style="left:84px;top:330px;font-size:96px;width:920px;color:#fff">Brings back only<br>what matters.</div>
+  <div class="a mono" id="s5prompt" style="left:84px;top:580px;width:912px;background:#fff;border-radius:24px;padding:28px 36px;font-size:36px;color:var(--navy)"><span style="color:var(--coral)">›</span> <span id="s5type"></span></div>
+  <div class="a" id="s5grid" style="left:139px;top:730px;width:802px;height:546px"></div>
+  <div class="a" id="s5beam" style="left:110px;top:730px;width:860px;height:6px;border-radius:3px;background:var(--coral);box-shadow:0 0 40px 10px rgba(254,102,57,.55)"></div>
+  <div class="a" id="s5count" style="left:84px;top:1300px;font-size:34px;font-weight:700;color:var(--sky)">61 records in your profile</div>
+  <div id="s5rows"></div>
+  <div class="a h" id="s5stat" style="left:84px;top:1330px;font-size:62px;color:#fff;width:920px;letter-spacing:-.02em">Loads ~570 tokens, <span style="color:var(--coral)">not 6,100.</span></div>
+  <div class="a" id="s5foot" style="left:84px;top:1412px;font-size:28px;color:var(--sky)">Measured on a 61-record test profile</div>
+</section>
+
+<!-- S6 TRUST ----------------------------------------------------------- -->
+<section class="scene" id="s6" style="background:var(--cream)">
+  <div class="a h" id="s6h1" style="left:84px;top:560px;font-size:120px">Your memory.</div>
+  <div class="a h" id="s6h2" style="left:84px;top:690px;font-size:120px;color:var(--blue)">In a file<br>you own.</div>
+  <div class="a pill" id="s6a" style="left:84px;top:1070px;font-size:44px;background:var(--navy);color:#fff;padding:24px 40px;text-transform:none;letter-spacing:0">See it</div>
+  <div class="a pill" id="s6b" style="left:330px;top:1070px;font-size:44px;background:var(--navy);color:#fff;padding:24px 40px;text-transform:none;letter-spacing:0">Correct it</div>
+  <div class="a pill" id="s6c" style="left:650px;top:1070px;font-size:44px;background:var(--coral);color:#fff;padding:24px 40px;text-transform:none;letter-spacing:0">Forget it</div>
+  <div class="a" id="s6d" style="left:84px;top:1230px;font-size:40px;font-weight:600;color:var(--mute)">Never stores passwords or keys.</div>
+</section>
+
+<!-- S7 CTA ------------------------------------------------------------- -->
+<section class="scene" id="s7" style="background:var(--cream)">
+  <img class="a" id="s7logo" src="logo_full.png" style="left:260px;top:330px;width:560px">
+  <div class="a h" id="s7t" style="left:0;width:1080px;text-align:center;top:900px;font-size:84px">Your AI,<br>working your way.</div>
+  <div class="a" id="s7w" style="left:0;width:1080px;text-align:center;top:1110px;font-size:34px;font-weight:600;color:var(--mute)">Works with Claude Code, Cursor and any MCP agent</div>
+  <div class="a pill" id="s7btn" style="left:190px;top:1230px;width:700px;text-align:center;font-size:48px;background:var(--coral);color:#fff;padding:34px 0;text-transform:none;letter-spacing:0;box-shadow:0 18px 40px rgba(254,102,57,.35)">Get Mini Me · link in bio</div>
+</section>
+
+<div id="wipe"></div>
+
+<script>
+const FPS = 30;
+const SCENES = [0, 3.3, 5.7, 11.8, 17.3, 25.3, 28.8, 32.5];
+const WIPES = ['#FE6639', '#0029CE', '#FE6639', '#061545', '#FE6639', '#0029CE'];
+const FIXES = [0.3, 0.9, 1.35, 1.7, 1.95, 2.15, 2.3, 2.42, 2.52, 2.61, 2.69, 2.76];
+
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const prog = (t, a, d) => clamp((t - a) / d);
+const ease = {
+  out: x => 1 - Math.pow(1 - x, 3),
+  inOut: x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2,
+  back: x => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); },
+};
+const $ = id => document.getElementById(id);
+function set(id, {op, x = 0, y = 0, s = 1, r = 0}) {
+  const el = typeof id === 'string' ? $(id) : id;
+  if (op !== undefined) el.style.opacity = op;
+  el.style.transform = `translate(${x}px,${y}px) scale(${s}) rotate(${r}deg)`;
+}
+function enter(id, t, start, dur = .45, dy = 48) {
+  const p = ease.out(prog(t, start, dur));
+  set(id, {op: prog(t, start, dur * .6), y: (1 - p) * dy});
+}
+function pop(id, t, start, dur = .5, from = .6) {
+  const p = ease.back(prog(t, start, dur));
+  set(id, {op: prog(t, start, dur * .4), s: from + (1 - from) * p});
+}
+function typeText(id, t, start, text, cps = 28) {
+  const n = Math.floor(clamp((t - start) * cps, 0, text.length));
+  const caret = t > start && n < text.length ? '▍' : '';
+  $(id).textContent = text.slice(0, n) + caret;
+}
+
+// ---- static build: recall grid and result rows
+const RELEVANT = new Set([5, 12, 19, 33, 47]);
+const TRAPS = new Set([26, 54]);
+const grid = $('s5grid');
+for (let i = 0; i < 61; i++) {
+  const d = document.createElement('div');
+  d.className = 'tile'; d.id = 'tile' + i;
+  d.style.left = (i % 8) * 102 + 'px';
+  d.style.top = Math.floor(i / 8) * 70 + 'px';
+  grid.appendChild(d);
+}
+const ROWS = [
+  ['✓', 'Fixed fee first: scope is fixed', '#fff'],
+  ['✓', 'Three-tier pricing table', '#fff'],
+  ['✓', 'One case study, after the summary', '#fff'],
+  ['✓', 'Terms appendix for procurement', '#fff'],
+  ['?', 'Sign as Sam: unconfirmed, flagged', '#C9D3FA'],
+  ['✕', '“Always lead with T&M”: replaced', '#FE6639'],
+  ['✕', 'October discount: expired', '#FE6639'],
+];
+const rowsEl = $('s5rows');
+ROWS.forEach(([k, txt, col], i) => {
+  const d = document.createElement('div');
+  d.className = 'row a'; d.id = 'row' + i;
+  d.style.top = (720 + i * 78) + 'px'; d.style.color = col;
+  d.innerHTML = `<span class="k">${k}</span>${txt}` + (k === '✕' ? '<span class="strike" style="left:64px"></span>' : '');
+  rowsEl.appendChild(d);
+});
+
+function hash(i) { return ((i * 2654435761) % 1000) / 1000; }
+
+// ---- per-scene draw functions, local time u
+const draw = [
+  function s1(u) {
+    set('s1h', {op: 1});
+    set('s1card', {op: 1});
+    // which fix cycle are we in?
+    let k = -1; for (let i = 0; i < FIXES.length; i++) if (u >= FIXES[i]) k = i;
+    const strike = $('s1strike'), nw = $('s1new'), old = $('s1old');
+    if (k < 0) { strike.style.width = '0'; nw.textContent = ''; old.style.opacity = 1; set('s1count', {op: 0}); }
+    else {
+      const gap = (FIXES[k + 1] ?? FIXES[k] + .5) - FIXES[k];
+      const p = prog(u, FIXES[k], Math.min(.14, gap * .45));
+      strike.style.width = (p * 100) + '%';
+      old.style.opacity = 1 - .55 * p;
+      nw.textContent = p >= 1 ? 'Sam' : '';
+      $('s1count').textContent = 'Fixed ×' + (k + 1);
+      const pp = ease.back(prog(u, FIXES[k], .18));
+      set('s1count', {op: 1, s: 1 + .25 * (1 - pp), r: (k % 2 ? 3 : -3) * (1 - pp)});
+    }
+    enter('s1b', u, 1.75, .35, 40);
+    const a = prog(u, 2.35, .3);
+    const shake = u > 2.35 && u < 2.8 ? Math.sin(u * 90) * 10 * (1 - prog(u, 2.35, .45)) : 0;
+    set('s1c', {op: a, x: shake, s: .8 + .2 * ease.back(a)});
+  },
+  function s2(u) {
+    pop('s2logo', u, .12, .6, .55);
+    enter('s2t1', u, .75, .45);
+    pop('s2t2', u, 1.15, .45, .7);
+  },
+  function s3(u) {
+    enter('s3p', u, .05, .4, 30);
+    enter('s3h', u, .15, .5);
+    enter('s3card', u, .5, .45);
+    // edit: strike line 1, collapse it, move decision to top
+    const st = prog(u, 1.0, .3);
+    $('s3strike').style.width = (st * 100) + '%';
+    const gone = ease.inOut(prog(u, 1.45, .4));
+    set('s3l1', {op: 1 - gone, x: -40 * gone});
+    const mv = ease.inOut(prog(u, 1.6, .6));
+    set('s3l3', {op: 1, y: -140 * mv, s: 1 + .04 * Math.sin(Math.PI * mv)});
+    set('s3l2', {op: 1, y: 0});
+    $('s3card').style.height = (330 - 70 * ease.inOut(prog(u, 2.0, .35))) + 'px';
+    $('s3l3').style.background = `rgba(0,41,206,${.12 * mv})`;
+    $('s3l3').style.color = mv > .5 ? '#0029CE' : '#061545';
+    enter('s3bub', u, 2.35, .4, 40);
+    typeText('s3type', u, 2.5, 'Dana skims. Put the decision first.', 30);
+    enter('s3rule', u, 3.9, .5, 80);
+    ['s3r0', 's3r1', 's3r2', 's3r3'].forEach((id, i) => enter(id, u, 4.05 + i * .13, .35, 16));
+    enter('s3cap', u, 4.75, .45, 30);
+  },
+  function s4(u) {
+    enter('s4p', u, .05, .4, 30);
+    enter('s4h', u, .15, .5);
+    [['s4c1', 's4t1', .9], ['s4c2', 's4t2', 1.7], ['s4c3', 's4t3', 2.5]].forEach(([c, tag, at]) => {
+      enter(c, u, at, .45, 60);
+      const p = ease.back(prog(u, at + .38, .32));
+      set(tag, {op: prog(u, at + .38, .1), s: 1.6 - .6 * p, r: -4 * p});
+    });
+    enter('s4f', u, 3.6, .5, 30);
+  },
+  function s5(u) {
+    enter('s5p', u, .05, .4, 30);
+    enter('s5h', u, .15, .5);
+    enter('s5prompt', u, .45, .4, 30);
+    typeText('s5type', u, .65, 'Draft the Halden proposal…', 26);
+    const out = ease.inOut(prog(u, 3.75, .45));
+    for (let i = 0; i < 61; i++) {
+      const el = $('tile' + i);
+      const appear = prog(u, 1.75 + hash(i) * .6, .25);
+      const row = Math.floor(i / 8);
+      const scanned = prog(u, 2.55 + row * .1, .15);
+      let bg = 'rgba(255,255,255,.16)', op = appear;
+      if (RELEVANT.has(i)) { bg = scanned > .5 ? '#0029CE' : bg; el.style.boxShadow = scanned > .5 ? '0 0 0 3px #fff, 0 0 30px rgba(120,150,255,.8)' : 'none'; }
+      else if (TRAPS.has(i)) { bg = scanned > .5 ? '#FE6639' : bg; }
+      else { op = appear * (1 - .75 * scanned); }
+      el.style.background = bg;
+      set(el, {op: op * (1 - out), s: 1 - .15 * out});
+    }
+    $('s5count').style.opacity = prog(u, 1.9, .3) * (1 - out);
+    const beam = prog(u, 2.5, .95);
+    set('s5beam', {op: (beam > 0 && beam < 1) ? 1 : 0, y: 546 * ease.inOut(beam)});
+    ROWS.forEach((_, i) => {
+      enter('row' + i, u, 4.15 + i * .2, .35, 24);
+      const s = $('row' + i).querySelector('.strike');
+      if (s) s.style.width = (prog(u, 4.45 + i * .2, .25) * 92) + '%';
+    });
+    enter('s5stat', u, 6.05, .45, 30);
+    enter('s5foot', u, 6.35, .4, 16);
+    // stat sits below the rows: move rows' area up slightly is unnecessary; positions chosen to fit
+  },
+  function s6(u) {
+    enter('s6h1', u, .05, .45);
+    enter('s6h2', u, .3, .5);
+    pop('s6a', u, .95, .4); pop('s6b', u, 1.12, .4); pop('s6c', u, 1.29, .4);
+    enter('s6d', u, 1.75, .45, 20);
+  },
+  function s7(u) {
+    pop('s7logo', u, .1, .6, .5);
+    enter('s7t', u, .6, .5);
+    enter('s7w', u, 1.0, .45, 20);
+    const p = ease.back(prog(u, 1.35, .5));
+    const pulse = u > 2.0 ? 1 + .025 * Math.sin((u - 2.0) * 6) : 1;
+    set('s7btn', {op: prog(u, 1.35, .2), s: (.7 + .3 * p) * pulse});
+  },
+];
+
+function render(t) {
+  let idx = SCENES.length - 2;
+  for (let i = 0; i < SCENES.length - 1; i++) if (t >= SCENES[i] && t < SCENES[i + 1]) { idx = i; break; }
+  document.querySelectorAll('.scene').forEach((s, i) => s.style.visibility = i === idx ? 'visible' : 'hidden');
+  draw[idx](t - SCENES[idx]);
+  // wipe transition around each internal boundary
+  const w = $('wipe'); let y = 100;
+  for (let b = 1; b < SCENES.length - 1; b++) {
+    const B = SCENES[b];
+    if (t >= B - .2 && t < B) { y = 100 - 100 * ease.inOut(prog(t, B - .2, .2)); w.style.background = WIPES[b - 1]; }
+    else if (t >= B && t < B + .22) { y = -100 * ease.inOut(prog(t, B, .22)); w.style.background = WIPES[b - 1]; }
+  }
+  w.style.transform = `translateY(${y}%)`;
+}
+window.render = render;
+window.DURATION = SCENES[SCENES.length - 1];
+window.FPS = FPS;
+render(0);
+</script>
+</body>
+</html>

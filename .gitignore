@@ -10,3 +10,7 @@ eval/runs/
 
 __pycache__/
 *.pyc
+
+marketing/reel/frames/
+marketing/reel/stills/
+marketing/reel/*.wav
