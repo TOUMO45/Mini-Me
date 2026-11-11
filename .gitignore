@@ -1,0 +1,12 @@
+# Personal Mini Me records never belong in this shareable repo.
+profile.md
+!eval/scenarios/**/profile.md
+*.private.md
+.mini-me/
+exports/
+
+# A/B runs hold real user outputs and the hidden key.
+eval/runs/
+
+__pycache__/
+*.pyc
