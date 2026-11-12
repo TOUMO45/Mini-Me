@@ -30,5 +30,6 @@ jobs:
           python skills/mini-me/scripts/mini_me.py --profile skills/mini-me/templates/profile.template.md validate
           python skills/mini-me/scripts/mini_me.py --profile eval/scenarios/s3-corrected-rule/profile.md validate
           python skills/mini-me/scripts/mini_me.py --profile eval/scenarios/s4-large-profile/profile.md validate
+          python skills/mini-me/scripts/mini_me.py --profile eval/scenarios/s5-which-would-i-choose/profile.md validate
       - name: Package builds with license checks
         run: python tools/package_skill.py

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 OR LicenseRef-MiniMe-Pro
-# Copyright 2026 TOUMO45. Free for noncommercial use; work use needs Mini Me Pro. See LICENSING.md.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Kamari Fatima Zuhra. See LICENSE.
 """Mini Me MCP server: exposes the profile engine as tools to any MCP-capable agent.
 
 Transport: stdio, newline-delimited JSON-RPC 2.0. Stdlib only.
@@ -43,6 +43,10 @@ FIELD_PROPS = {
     "last_decision": {"type": "string", "description": "For proj"},
     "completed": {"type": "string", "description": "For proj"},
     "next_step": {"type": "string", "description": "For proj"},
+    "question": {"type": "string", "description": "For dec: the decision being made"},
+    "options": {"type": "string", "description": "For dec: the options, separated by ';'"},
+    "choice": {"type": "string", "description": "For dec: what the user chose. Omit to log a prediction only"},
+    "predicted": {"type": "string", "description": "For dec: Mini Me's prediction, logged before the user decides"},
 }
 
 TOOLS = [
@@ -63,6 +67,35 @@ TOOLS = [
                         "independent source agrees. Refuses invalid records and anything that looks like a credential."),
         "inputSchema": {"type": "object", "required": ["type", "evidence", "sources"], "properties": FIELD_PROPS},
         "annotations": {"destructiveHint": False, "idempotentHint": True},
+    },
+    {
+        "name": "mini_me_choose",
+        "description": ("Record the choice the user actually made on a decision (dec- record). Keeps the earlier "
+                        "prediction, reports whether it was right, and updates the track record."),
+        "inputSchema": {"type": "object", "required": ["id", "choice"], "properties": {
+            "id": {"type": "string"}, "choice": {"type": "string"}, "reason": {"type": "string"},
+            "evidence": {"type": "string"}, "sources": {"type": "string"}}},
+        "annotations": {"destructiveHint": False},
+    },
+    {
+        "name": "mini_me_explain",
+        "description": "Answer 'why did you do that?': one record in plain language, with its reason, confidence, evidence, and what it replaced.",
+        "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}},
+        "annotations": {"readOnlyHint": True},
+    },
+    {
+        "name": "mini_me_history",
+        "description": "Answer 'what did I decide before?': a timeline of decisions, lessons, and corrections, newest first.",
+        "inputSchema": {"type": "object", "properties": {
+            "project": {"type": "string"}, "since": {"type": "string", "description": "YYYY-MM-DD"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 200, "default": 30}}},
+        "annotations": {"readOnlyHint": True},
+    },
+    {
+        "name": "mini_me_stats",
+        "description": "Rules by confidence, how many have a known reason, open decisions, and the prediction track record.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "annotations": {"readOnlyHint": True},
     },
     {
         "name": "mini_me_show",
@@ -118,6 +151,15 @@ class Server:
             mapped = {dict((f, key) for f, key in mm.ADD_FLAGS).get(k, k): v for k, v in fields.items()}
             mapped["Type"] = mapped.pop("type")
             return mm.add_record(self.profile, mapped)
+        if name == "mini_me_choose":
+            return mm.choose_record(self.profile, str(a["id"]), str(a["choice"]), a.get("reason"), a.get("evidence"),
+                                    a.get("sources"))
+        if name == "mini_me_explain":
+            return mm.explain_text(self.load(), str(a["id"]))
+        if name == "mini_me_history":
+            return mm.history_text(self.load(), project=a.get("project"), since=a.get("since"), limit=int(a.get("limit", 30)))
+        if name == "mini_me_stats":
+            return mm.stats_text(self.load())
         if name == "mini_me_show":
             return mm.show_text(self.load(), rtype=a.get("type"), project=a.get("project"), query=a.get("query"),
                                 include_inactive=bool(a.get("include_inactive")))
@@ -143,9 +185,10 @@ class Server:
                     "protocolVersion": asked if asked in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0],
                     "capabilities": {"tools": {"listChanged": False}},
                     "serverInfo": {"name": "mini-me", "version": mm.__version__},
-                    "instructions": ("Mini Me holds the user's working rules. Call mini_me_recall with today's brief "
-                                     "before producing work the user wants done their way. Apply records only within "
-                                     "their scope. After a correction, call mini_me_add."),
+                    "instructions": ("Mini Me holds the user's working rules and past decisions. Call mini_me_recall with "
+                                     "today's brief before producing work the user wants done their way. Apply records only "
+                                     "within their scope; use precedents and the prediction track record for 'which would I "
+                                     "choose?'. After a correction, call mini_me_add; after the user decides, mini_me_choose."),
                 })
             if method == "ping":
                 return ok(mid, {})

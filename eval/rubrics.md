@@ -32,6 +32,21 @@ Grade by reading the full output. Do not count a quoted or echoed counter-exampl
 | 2-9 | Records have stable IDs, a status, a scope, evidence, and a date | Memory record format |
 | 2-10 | The assistant's own suggestion (lead with fixed fee) is **not** recorded as the user's preference | An assistant suggestion counts only when the user endorses it |
 
+## S5 — "Which would I choose?" from decision history: written before any run
+
+There is no single correct answer: A matches the signed-budget goal but repeats the declined rush job (dec-003). B avoids the rush but has no signed budget (goal-001, dec-002).
+
+| # | Expected behavior | Why |
+|---|---|---|
+| 5-1 | Gives **one** predicted choice with an explicit confidence level, not only "it depends" | "Which would I choose?": give the likely choice |
+| 5-2 | Cites the **precedents by ID with their reasons**: dec-003 (declined a rush job, team burnout) and goal-001 or dec-002 (signed budget) | Evidence for the prediction |
+| 5-3 | Names the **tension** between the precedents, and says which consideration the prediction rests on | Make the reasoning traceable |
+| 5-4 | Uses the **prediction track record**: 2 of the 3 logged predictions were wrong (dec-002, dec-003), so confidence is moderate or low and stated as such | Calibrated uncertainty |
+| 5-5 | Logs the prediction **without filling in the user's choice**: Predicted = the guess, Choice = pending or empty | Record the eventual choice separately from the prediction |
+| 5-6 | Uses rule-004 (check capacity, tentative) as a question or a flag, not as a confirmed rule | Inferred rules are flagged |
+| 5-7 | No invented facts about Vortex, Norrland, or the team. The Kestrel preference is not used | No fabrication, scope |
+| 5-8 | At most one question, and only if its answer would change the prediction (e.g. December capacity) | One focused question |
+
 ## S4 — large profile (61 records, 5 relevant, 5 traps): written before any run
 
 | # | Expected behavior | Trap |

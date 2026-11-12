@@ -2,14 +2,14 @@
 
 Requires Python 3.11+ (standard library only, nothing to `pip install`).
 
-**License:** free for personal and noncommercial use. Using Mini Me at work or for clients needs Mini Me Pro. See `LICENSING.md`.
+**License:** MIT. Free to use, modify, and share, including commercially. See `LICENSE`.
 
 ## 1. Put the skill where your agent reads skills
 
 **Claude Code (all projects):** unzip so this folder becomes `~/.claude/skills/mini-me/`.
 
 ```bash
-unzip mini-me-v2.1.0.zip -d ~/.claude/skills/
+unzip mini-me-v2.2.0.zip -d ~/.claude/skills/
 ```
 
 **Claude.ai / Claude apps:** upload the zip as a custom skill (Settings → Capabilities → Skills), if your plan supports custom skills.

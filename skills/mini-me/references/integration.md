@@ -44,7 +44,7 @@ Claude Code can register it from the shell:
 claude mcp add mini-me -e MINI_ME_PROFILE="$HOME/.mini-me/profile.md" -- python3 "$PWD/skills/mini-me/scripts/mcp_server.py"
 ```
 
-Tools: `mini_me_recall`, `mini_me_add`, `mini_me_show`, `mini_me_review`, `mini_me_export`, `mini_me_forget`, `mini_me_validate`. The server tells the agent at initialization to call `mini_me_recall` before work the user wants done their way. `mini_me_forget` is marked destructive, so clients that confirm destructive tools will ask the user first.
+Tools: `mini_me_recall`, `mini_me_add`, `mini_me_choose`, `mini_me_explain`, `mini_me_history`, `mini_me_stats`, `mini_me_show`, `mini_me_review`, `mini_me_export`, `mini_me_forget`, `mini_me_validate`. The server tells the agent at initialization to call `mini_me_recall` before work the user wants done their way. `mini_me_forget` is marked destructive, so clients that confirm destructive tools will ask the user first.
 
 ## AGENTS.md readers (Codex and others)
 

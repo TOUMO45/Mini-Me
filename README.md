@@ -14,6 +14,8 @@
 | Confidence | Everything looks equally true | `confirmed` (you said it) · `likely` (2+ independent sources) · `tentative` (one example) |
 | One-off instructions | Leak into later work | `exc-` records with an expiry, never applied outside their scope |
 | Your manager's or client's rules | Mixed into "your" preferences | Attributed (`Said by`) and limited to the scope they stated |
+| Past decisions | Lost in old chats | **Decision history**: what you chose, between what, and why. Used as precedents for the next choice |
+| "Which would I choose?" | A confident guess | A prediction **with its track record** ("right 1 of 3 times so far"), logged and checked against what you actually chose |
 | Per-task cost | Grows with history | **~570 tokens**, flat from 61 to 4,000 records |
 | Trust | Opaque | A plain Markdown file you own. It refuses to store credentials, and it can explain or forget any rule |
 | Lock-in | One vendor | Claude Code skill, MCP server, AGENTS.md, CLI, or pasted instructions |
@@ -31,6 +33,8 @@ Each task runs the same loop: **Brief → Recall → Decide → Deliver → Lear
 - **Harvest the diff.** Every edit you make becomes one record.
 - **Ask for one reason.** Ask why for the single most consequential edit. The reason is what transfers to new situations.
 - **Compound.** A second independent example promotes a guess to `likely`. `review` suggests merges and resolves conflicts.
+- **Decide from precedent.** Past decisions come back as precedents, with the reason behind each. Predictions are logged, then scored against your real choice.
+- **Stay readable.** `explain <ID>` turns any rule into a plain sentence with its reason, confidence and history. `review` flags vague rules and rules with no reason.
 
 ## Quick start
 
@@ -67,7 +71,11 @@ Copy-paste configs: [`skills/mini-me/references/integration.md`](skills/mini-me/
 | `init` | Create a private profile (mode 600) |
 | `recall "<brief>"` | The relevant records only, grouped and with conflicts resolved. `--json` available |
 | `add …` | Record, merge, promote, or supersede. Validated before writing. Credentials refused |
-| `review` | Suggestions for promotions, merges, conflicts, expired exceptions, and stale guesses. Applies nothing |
+| `add --type dec …` · `choose dec-N` | Log a prediction for a decision, then record what you actually chose |
+| `explain <ID>` | "Why did you do that?": the rule as a plain sentence, with reason, confidence, evidence and history |
+| `history` | "What did I decide before?": decisions, lessons and corrections, newest first |
+| `stats` | How well Mini Me knows you: rules by confidence, reasons known, prediction track record |
+| `review` | Suggestions for promotions, merges, conflicts, expired exceptions, stale guesses, open decisions, and unclear rules. Applies nothing |
 | `show` | "What have you learned about me?": stated, inferred, said by others |
 | `export` | A dated snapshot for another agent. Evidence and sensitive records are left out by default |
 | `forget <ID>` | Delete a record and its references. It says what it can't reach |
@@ -83,6 +91,7 @@ The skill was built test-first. Fresh agents ran each scenario without the skill
 | S2: imported chat with a manager's rules, injection, password | 9/10 | 10/10 | 10/10 |
 | S3: corrected rule, cross-client scope (held out) | — | 6/6 | 6/6 |
 | S4: 61-record profile with 5 traps | — | 8/8 | 8/8 |
+| S5: "Which would I choose?" from decision history | — | 7/8 (v2.1: couldn't log the prediction) | **8/8** (v2.2) |
 
 `python3 eval/bench_scale.py`:
 
@@ -125,14 +134,7 @@ AGENTS.md  CHANGELOG.md  .github/workflows/test.yml
 
 ## License
 
-**Free for personal and noncommercial use. Mini Me Pro for work.**
-
-| Use | License |
-|---|---|
-| Personal projects, learning, research, charities, schools, government | Free: [PolyForm Noncommercial 1.0.0](LICENSE.md) |
-| Your job, your business, client work | [Mini Me Pro](skills/mini-me/LICENSE-PRO.md): per-seat, commercial use, 12 months of updates (versions are yours to keep), support |
-
-Plain-language guide: [`skills/mini-me/LICENSING.md`](skills/mini-me/LICENSING.md). What you create with Mini Me is always yours.
+[MIT](LICENSE) © 2026 Kamari Fatima Zuhra. Free to use, modify, and share, including commercially.
 
 ## Privacy
 

@@ -38,6 +38,7 @@ One `###` heading per record, then one `- Field: value` bullet per field.
 | Exception | `exc-` | Condition, Action, Scope, Expires |
 | Sensitive constraint | `sens-` | Condition, Action, Scope, Purpose |
 | Project state | `proj-` | Project, Latest version, Last decision, Next step |
+| Decision | `dec-` | Question, Options, Choice (or `pending` with `Predicted`) |
 
 Every record needs: Evidence, Sources, Reason, Status, Source date, Updated, Sensitivity.
 
@@ -59,6 +60,28 @@ Optional on `proj-` records: `Constraints`, for a client's or audience's stated 
 - **Expires**: a date (`2026-12-31`) or a scope end (`end of Acme project`, `this task only`).
 - **Sensitivity**: `ordinary` or `sensitive`. `sens-` records must be `sensitive`, `confirmed`, and carry the user's stated `Purpose`.
 - **Never store** passwords, access keys, tokens, or private keys. The validator rejects common shapes of them.
+
+## Decision
+
+A choice the user made between options. These are the precedents recall uses for "which would I choose?". Log a prediction before the user decides (`Choice: pending`, status `tentative`), then record the real choice with `mini_me.py choose`. The prediction stays in `Predicted`, so the track record can score it.
+
+```markdown
+### dec-003 · Decision
+- Question: Accept a 3-week rush job from Acme Logistics at a 30% higher rate?
+- Options: Accept (+30% rate, 3 weeks, whole team); Decline
+- Choice: Decline
+- Predicted: Accept
+- Evidence: "Decline. Rush jobs wrecked the team in Q2, the premium isn't worth it."
+- Sources: chat-2026-10-06
+- Reason: Rush jobs burned out the team in Q2; the rate premium did not compensate
+- Status: confirmed
+- Source date: 2026-10-06
+- Updated: 2026-10-06
+- Supersedes: —
+- Sensitivity: ordinary
+```
+
+A pending decision can't be `confirmed`, and it must have a `Predicted` value.
 
 ## Project state
 

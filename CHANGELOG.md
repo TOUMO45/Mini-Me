@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.2.0 — 2026-11-12
+
+**Remembers your decisions, not only your rules.**
+
+### Added
+- **Decision records (`dec-`)**: question, options, your choice, your reason, and Mini Me's prediction, kept separately. `add --type dec … --predicted …` logs a prediction. `choose dec-N --choice … --reason …` records what you actually chose and scores the prediction.
+- **Precedents in `recall`**: past decisions similar to today's question, with the reason behind each, plus the **prediction track record**. They never use up the rule budget.
+- **`explain <ID>`**: one record in plain language: what it makes the agent do, why, how sure, the evidence, and what it replaced or was replaced by.
+- **`history`**: a timeline of decisions, lessons and corrections, newest first, filterable by project and date.
+- **`stats`**: rules by confidence, how many have a known reason, open decisions, and prediction accuracy.
+- **Clarity checks in `review`**: conditions that don't say when a rule applies, vague actions ("better", "properly"), overlong actions, important rules with no reason, decisions left open for more than 14 days, and a low prediction track record.
+- MCP tools `mini_me_choose`, `mini_me_explain`, `mini_me_history`, `mini_me_stats`.
+- SKILL.md: a "Which would I choose?" protocol and a "Write rules anyone can apply" standard. Scenario S5 and its rubric.
+
+### Changed
+- **License: MIT**, © 2026 Kamari Fatima Zuhra. This replaces the noncommercial + Pro dual license from 2.1.0.
+
 ## 2.1.0 — 2026-11-11
 
 ### Licensing

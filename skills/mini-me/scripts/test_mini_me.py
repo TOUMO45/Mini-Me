@@ -394,3 +394,116 @@ class TestReviewAndInit(Base):
         self.assertEqual(code, 0)
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.run_cli("init")[0], 1)
+
+
+S5 = Path(__file__).resolve().parents[3] / "eval" / "scenarios" / "s5-which-would-i-choose" / "profile.md"
+S5_BRIEF = ("Two offers for December. Vortex Labs: 4-week rush rebrand at a 40% higher rate, budget signed, "
+            "whole team. Norrland Coop: 8-week research audit, budget approval in January. Which would I choose?")
+
+
+@unittest.skipUnless(S5.exists(), "S5 fixture not present")
+class TestDecisionsS5(unittest.TestCase):
+    def setUp(self):
+        self.p = mini_me.parse(S5)
+
+    def test_profile_with_decisions_is_valid(self):
+        self.assertEqual([f for f in mini_me.validate(self.p, TODAY) if f.level == "error"], [])
+
+    def test_recall_surfaces_precedent_and_track_record(self):
+        d = mini_me.recall_data(self.p, S5_BRIEF, today=TODAY)
+        self.assertIn("dec-003", [x["id"] for x in d["precedents"]])
+        self.assertEqual(d["track_record"], {"correct": 1, "scored": 3})
+        rule_ids = {x["id"] for g in d["groups"].values() for x in g}
+        self.assertNotIn("dec-003", rule_ids)  # precedents never use up the rule budget
+        text = mini_me.recall_text(self.p, S5_BRIEF, today=TODAY)
+        self.assertIn("## Precedents", text)
+        self.assertIn("1 of 3 predictions right", text)
+
+    def test_explain_decision_and_rule(self):
+        t = mini_me.explain_text(self.p, "dec-003", today=TODAY)
+        self.assertIn("You chose:** Decline", t)
+        self.assertIn("predicted Accept, which was wrong", t)
+        r = mini_me.explain_text(self.p, "rule-004", today=TODAY)
+        self.assertIn("Mini Me will: check team capacity", r)
+        self.assertIn("Why:** not known yet", r)
+        self.assertIn("Tentative", r)
+
+    def test_history_newest_first(self):
+        h = mini_me.history_text(self.p, today=TODAY)
+        self.assertLess(h.index("dec-003"), h.index("dec-001"))
+        self.assertIn("Decided: Accept a 3-week rush job", h)
+        self.assertIn("predicted Accept: wrong", h)
+        self.assertNotIn("Kestrel", mini_me.history_text(self.p, project="selection", today=TODAY))
+
+    def test_stats(self):
+        s = mini_me.stats_text(self.p, today=TODAY)
+        self.assertIn("Decisions recorded: 3 (0 still open)", s)
+        self.assertIn("1 of 3 right", s)
+
+
+class TestDecisionFlow(Base):
+    def test_predict_then_choose(self):
+        msg = mini_me.add_record(self.path, {
+            "Type": "dec", "Question": "Vortex rush or Norrland audit?", "Options": "Vortex; Norrland",
+            "Predicted": "Norrland", "Evidence": '"Which would I choose?"', "Sources": "chat-n1"}, today=TODAY)
+        self.assertIn("Added dec-001", msg)
+        r = mini_me.parse(self.path).records[0]
+        self.assertEqual((r.get("Choice"), r.status), ("pending", "tentative"))
+        self.assertIn("a prediction only, until the user decides", mini_me.explain_text(mini_me.parse(self.path), "dec-001"))
+        self.assertEqual(self.run_cli("validate")[0], 0)
+        out = mini_me.choose_record(self.path, "dec-001", "Vortex", today=TODAY)
+        self.assertIn("predicted Norrland: wrong", out)
+        self.assertIn("Ask the user why", out)
+        self.assertIn("0 of 1 predictions right", out)
+        r = mini_me.parse(self.path).records[0]
+        self.assertEqual((r.get("Choice"), r.get("Predicted"), r.status), ("Vortex", "Norrland", "confirmed"))
+
+    def test_pending_cannot_be_confirmed(self):
+        with self.assertRaises(mini_me.MiniMeError):
+            mini_me.add_record(self.path, {"Type": "dec", "Question": "Q?", "Options": "a; b", "Predicted": "a",
+                                           "Status": "confirmed", "Evidence": "e", "Sources": "s"}, today=TODAY)
+        with self.assertRaises(mini_me.MiniMeError):  # pending needs a prediction
+            mini_me.add_record(self.path, {"Type": "dec", "Question": "Q?", "Options": "a; b",
+                                           "Evidence": "e", "Sources": "s"}, today=TODAY)
+
+    def test_decisions_never_merge_into_each_other(self):
+        for q in ("First question?", "Second question?"):
+            mini_me.add_record(self.path, {"Type": "dec", "Question": q, "Options": "a; b", "Choice": "a",
+                                           "Status": "confirmed", "Evidence": "e", "Sources": "same"}, today=TODAY)
+        self.assertEqual([r.id for r in mini_me.parse(self.path).records], ["dec-001", "dec-002"])
+
+    def test_choose_rejects_non_decision_and_empty_choice(self):
+        self.write(record())
+        with self.assertRaises(mini_me.MiniMeError):
+            mini_me.choose_record(self.path, "rule-001", "x", today=TODAY)
+        with self.assertRaises(mini_me.MiniMeError):
+            mini_me.choose_record(self.path, "rule-001", "pending", today=TODAY)
+
+    def test_cli_choose_and_explain(self):
+        self.run_cli("add", "--type", "dec", "--question", "Which tier first?", "--options", "basic; pro",
+                     "--predicted", "pro", "--evidence", "asked", "--sources", "c1")
+        code, out, err = self.run_cli("choose", "dec-001", "--choice", "pro", "--reason", "Buyers anchor on the top tier")
+        self.assertEqual(code, 0, err)
+        self.assertIn("right", out)
+        self.assertIn("Why:** Buyers anchor on the top tier", self.run_cli("explain", "dec-001")[1])
+
+
+class TestClarityReview(Base):
+    def test_flags_vague_untriggered_long_and_reasonless(self):
+        self.write(
+            record(rid="pref-001", typ="Preference", Condition="Client emails", Action="Write better emails", Sources="a",
+                   Reason="unknown"),
+            record(rid="pref-002", typ="Preference", Sources="b", Reason="unknown",
+                   Action=" ".join(["word"] * 35)),
+        )
+        out = mini_me.review_text(mini_me.parse(self.path), today=TODAY)
+        self.assertIn("Clarify pref-001", out)
+        self.assertIn("Make pref-001 concrete: 'better'", out)
+        self.assertIn("Split pref-002", out)
+        self.assertIn("Ask why for pref-001", out)
+
+    def test_flags_stale_open_decision(self):
+        self.write(record(rid="dec-001", typ="Decision", Condition=None, Action=None, Scope=None, Question="Q?",
+                          Options="a; b", Choice="pending", Predicted="a", Status="tentative",
+                          **{"Source date": "2026-10-01", "Updated": "2026-10-01"}))
+        self.assertIn("Close dec-001", mini_me.review_text(mini_me.parse(self.path), today=TODAY))

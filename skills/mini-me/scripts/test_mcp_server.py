@@ -45,7 +45,8 @@ class TestMCP(unittest.TestCase):
         self.assertEqual(r[1]["result"]["protocolVersion"], "2025-06-18")
         self.assertEqual(r[1]["result"]["serverInfo"]["name"], "mini-me")
         names = {t["name"] for t in r[2]["result"]["tools"]}
-        self.assertTrue({"mini_me_recall", "mini_me_add", "mini_me_forget"} <= names)
+        self.assertTrue({"mini_me_recall", "mini_me_add", "mini_me_forget", "mini_me_choose", "mini_me_explain",
+                         "mini_me_history", "mini_me_stats"} <= names)
         self.assertEqual(r[3]["result"], {})
         self.assertEqual(len(r), 3)  # the notification gets no reply
 
@@ -67,6 +68,21 @@ class TestMCP(unittest.TestCase):
         self.assertIn("Lead with the fixed-fee option", self.text(r[3]))
         self.assertIn("Removed rule-001", self.text(r[4]))
         self.assertIn("No matching", self.text(r[5]))
+
+    def test_decision_flow_over_mcp(self):
+        r = self.session(
+            self.call(1, "mini_me_add", {"type": "dec", "question": "Rush job or audit?", "options": "rush; audit",
+                                         "predicted": "audit", "evidence": "asked", "sources": "c1"}),
+            self.call(2, "mini_me_choose", {"id": "dec-001", "choice": "audit", "reason": "Protect the team"}),
+            self.call(3, "mini_me_explain", {"id": "dec-001"}),
+            self.call(4, "mini_me_history", {}),
+            self.call(5, "mini_me_stats", {}),
+        )
+        self.assertIn("Added dec-001", self.text(r[1]))
+        self.assertIn("right", self.text(r[2]))
+        self.assertIn("You chose:** audit", self.text(r[3]))
+        self.assertIn("Decided: Rush job or audit?", self.text(r[4]))
+        self.assertIn("1 of 1 right", self.text(r[5]))
 
     def test_errors_are_tool_errors_not_crashes(self):
         r = self.session(

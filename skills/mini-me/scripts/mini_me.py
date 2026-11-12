@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 OR LicenseRef-MiniMe-Pro
-# Copyright 2026 TOUMO45. Free for noncommercial use; work use needs Mini Me Pro. See LICENSING.md.
-"""Mini Me profile engine: recall, add, review, show, export, forget, validate, next-id, init.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Kamari Fatima Zuhra. See LICENSE.
+"""Mini Me profile engine: recall, add, choose, explain, history, stats, review, show, export, forget, validate, next-id, init.
 
 Stdlib only. The profile is a private Markdown file (see references/profile-format.md).
 Path resolution: --profile, then $MINI_ME_PROFILE, then ~/.mini-me/profile.md.
@@ -22,7 +22,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 TYPES = {
     "goal": "Goal",
@@ -32,6 +32,7 @@ TYPES = {
     "exc": "Exception",
     "sens": "Sensitive constraint",
     "proj": "Project state",
+    "dec": "Decision",
 }
 TYPE_ALIASES = {
     "goal": "goal",
@@ -45,6 +46,7 @@ TYPE_ALIASES = {
     "sensitive constraint": "sens",
     "sensitive personal constraint": "sens",
     "project state": "proj",
+    "decision": "dec",
 }
 STATUSES = {"confirmed", "likely", "tentative", "superseded"}
 STATUS_RANK = {"tentative": 0, "likely": 1, "confirmed": 2}
@@ -52,13 +54,16 @@ INFERRED = {"likely", "tentative"}
 SENSITIVITY = {"ordinary", "sensitive"}
 COMMON_REQUIRED = ["Evidence", "Sources", "Reason", "Status", "Source date", "Updated", "Sensitivity"]
 RULE_REQUIRED = ["Condition", "Action", "Scope"]
+NON_RULE = {"proj", "dec"}  # record types that are not condition → action rules
+PENDING = {"pending", "", "—", "-", "open"}
 EXTRA_REQUIRED = {
     "exc": ["Expires"],
     "sens": ["Purpose"],
     "proj": ["Project", "Latest version", "Last decision", "Next step"],
+    "dec": ["Question", "Options", "Choice"],
 }
 FIELD_ORDER = [
-    "Said by", "Project", "Constraints", "Latest version", "Last decision", "Completed", "Next step",
+    "Question", "Options", "Choice", "Predicted", "Said by", "Project", "Constraints", "Latest version", "Last decision", "Completed", "Next step",
     "Condition", "Action", "Scope", "Exceptions", "Expires", "Purpose", "Evidence", "Sources", "Reason",
     "Status", "Source date", "Updated", "Supersedes", "Sensitivity",
 ]
@@ -229,6 +234,23 @@ def parse_date(value: str) -> dt.date | None:
         return None
 
 
+def is_pending(r: Record) -> bool:
+    return r.prefix == "dec" and r.get("Choice").lower() in PENDING
+
+
+def prediction_hit(r: Record) -> bool | None:
+    """For a decided record with a logged prediction: was the prediction right? None if not scorable."""
+    if r.prefix != "dec" or is_pending(r) or is_empty(r.get("Predicted")):
+        return None
+    return norm_text(r.get("Predicted")) == norm_text(r.get("Choice"))
+
+
+def track_record(profile: Profile) -> tuple[int, int]:
+    """(correct, scored) predictions across all decisions."""
+    hits = [h for h in (prediction_hit(r) for r in profile.records) if h is not None]
+    return sum(hits), len(hits)
+
+
 def said_by_other(r: Record) -> bool:
     return r.get("Said by").lower() not in SELF
 
@@ -286,6 +308,8 @@ def jaccard(a: str, b: str) -> float:
 def doc_tokens(r: Record) -> list[str]:
     weighted = [r.get("Condition")] * 2 + [r.get("Scope")] * 2 + [r.get("Project")] * 2 + [
         r.get("Action"), r.get("Constraints"), r.get("Said by"), r.get("Last decision"), r.get("Next step")]
+    if r.prefix == "dec":
+        weighted += [r.get("Question")] * 2 + [r.get("Options"), r.get("Choice"), r.get("Reason")]
     return tokens(" ".join(weighted))
 
 
@@ -334,7 +358,7 @@ def names_missing(r: Record, brief: str) -> list[str]:
 
 def possible_conflict(a: Record, b: Record) -> bool:
     """Same situation, overlapping but different instructions: likely the same decision made twice."""
-    if a.prefix == "proj" or b.prefix == "proj":
+    if a.prefix in NON_RULE or b.prefix in NON_RULE:
         return False
     return jaccard(a.get("Condition"), b.get("Condition")) >= 0.6 and 0.2 <= jaccard(a.get("Action"), b.get("Action")) < 0.8
 
@@ -390,12 +414,17 @@ def validate(profile: Profile, today: dt.date | None = None) -> list[Finding]:
 
         prefix = expected or r.prefix
         required = list(COMMON_REQUIRED)
-        if prefix != "proj":
+        if prefix not in NON_RULE:
             required += RULE_REQUIRED
         required += EXTRA_REQUIRED.get(prefix, [])
         for key in required:
-            if key not in r.fields or (is_empty(r.fields[key]) and key != "Reason"):
+            if key not in r.fields or (is_empty(r.fields[key]) and key not in {"Reason", "Choice"}):
                 findings.append(Finding("error", r.line, f"{r.id}: missing required field '{key}'"))
+        if prefix == "dec":
+            if is_pending(r) and r.status == "confirmed":
+                findings.append(Finding("error", r.line, f"{r.id}: a decision still pending can't be 'confirmed'. Record the user's choice with `choose`, or use 'tentative'"))
+            if is_pending(r) and is_empty(r.get("Predicted")):
+                findings.append(Finding("error", r.line, f"{r.id}: a pending decision needs a 'Predicted' choice"))
 
         status = r.status
         if status and status not in STATUSES:
@@ -443,7 +472,7 @@ def validate(profile: Profile, today: dt.date | None = None) -> list[Finding]:
     # Idempotent imports: the same source + same decision must be one record.
     seen: dict[tuple, Record] = {}
     for r in profile.records:
-        if r.status == "superseded" or r.prefix == "proj":
+        if r.status == "superseded" or r.prefix in NON_RULE:
             continue
         key = (frozenset(s.lower() for s in r.sources()), norm_text(r.get("Condition")), norm_text(r.get("Action")))
         if not key[0]:
@@ -480,6 +509,14 @@ def render(r: Record, hide: set[str] = frozenset()) -> str:
 def one_line(r: Record, today: dt.date) -> str:
     """Compact form for recall: everything an agent needs to apply the record, nothing else."""
     head = f"- **{r.id}** · {r.status or '?'} · {r.get('Updated') or r.get('Source date')}"
+    if r.prefix == "dec":
+        if is_pending(r):
+            return f"{head}: {r.get('Question')} Options: {r.get('Options')}. Still open. Mini Me predicted: {r.get('Predicted')}"
+        body = f"{r.get('Question')} → chose **{r.get('Choice')}**. Options: {r.get('Options')}. Why: {r.get('Reason') or 'unknown'}"
+        hit = prediction_hit(r)
+        if hit is not None:
+            body += f". Mini Me had predicted {r.get('Predicted')} ({'right' if hit else 'wrong'})"
+        return f"{head}: {body}"
     if r.prefix == "proj":
         body = f"{r.get('Project')}. Latest: {r.get('Latest version')}. Last decision: {r.get('Last decision')}. Next: {r.get('Next step')}"
         if not is_empty(r.get("Constraints")):
@@ -508,8 +545,14 @@ def recall_data(profile: Profile, brief: str, k: int = 8, today: dt.date | None 
     top = ranked[0][0] if ranked else 0.0
     threshold = max(top * 0.3, 1e-9)
     active, inactive = [], []
+    precedents = []
+    dec_top = max((s for s, i in ranked if recs[i].prefix == "dec"), default=0.0)
     for s, i in ranked:
         r = recs[i]
+        if r.prefix == "dec":
+            if s > 0 and s >= dec_top * 0.25 and len(precedents) < 4:
+                precedents.append(r)
+            continue
         # A record is triggered when the brief covers most of its Condition. Missing a triggered rule is worse
         # than showing an extra one, so triggered records are kept even when another record scores far higher.
         cond = set(tokens(r.get("Condition") or r.get("Project")))
@@ -564,7 +607,10 @@ def recall_data(profile: Profile, brief: str, k: int = 8, today: dt.date | None 
             if old in by_id and old not in {e["id"] for e in excluded}:
                 excluded.append({"id": old, "why": f"superseded by {r.id}"})
 
+    hits, scored = track_record(profile)
     return {
+        "precedents": [{"id": r.id, "line": one_line(r, today)} for r in precedents],
+        "track_record": {"correct": hits, "scored": scored},
         "brief": brief,
         "profile": str(profile.path),
         "date": today.isoformat(),
@@ -604,11 +650,19 @@ def recall_text(profile: Profile, brief: str, k: int = 8, today: dt.date | None 
             out.append(f"- {' vs '.join(c['records'])} → use **{c['use']}** ({c['why']}: latest explicit correction wins). "
                        f"Check that both describe the same decision")
         out.append("")
+    if d["precedents"]:
+        out.append("## Precedents: what the user decided before in similar situations")
+        out += [x["line"] for x in d["precedents"]]
+        tr = d["track_record"]
+        if tr["scored"]:
+            out.append(f"Prediction track record: {tr['correct']} of {tr['scored']} predictions right. "
+                       "State a confidence that matches it.")
+        out.append("")
     if d["excluded"]:
         out.append("## Do not apply")
         out += [f"- {e['id']}: {e['why']}" for e in d["excluded"]]
         out.append("")
-    if not d["matched"]:
+    if not d["matched"] and not d["precedents"]:
         out.append("No records match this brief. Work from the request and make consequential assumptions visible.")
     return "\n".join(out).rstrip() + "\n"
 
@@ -682,8 +736,10 @@ def add_record(path: Path, fields: dict[str, str], today: dt.date | None = None)
     fields.setdefault("Supersedes", "—")
     fields.setdefault("Sensitivity", "sensitive" if prefix == "sens" else "ordinary")
     fields.setdefault("Status", "tentative")
-    if prefix != "proj":
+    if prefix not in NON_RULE:
         fields.setdefault("Exceptions", "none known")
+    if prefix == "dec":
+        fields.setdefault("Choice", "pending")
     fields["Status"] = fields["Status"].lower()
 
     exists = path.exists()
@@ -692,7 +748,7 @@ def add_record(path: Path, fields: dict[str, str], today: dt.date | None = None)
     lines = text.splitlines()
 
     # 1. Same decision already recorded: merge sources instead of duplicating.
-    if profile and prefix != "proj":
+    if profile and prefix not in NON_RULE:
         for r in profile.records:
             if (r.prefix == prefix and is_active(r, today)
                     and norm_text(r.get("Condition")) == norm_text(fields.get("Condition", ""))
@@ -802,9 +858,233 @@ def review_text(profile: Profile, today: dt.date | None = None, stale_days: int 
             items.append(f"Check {r.id}: tentative for {(today - src).days} days on one example. Ask the user once, or forget it.")
         if r.status in {"confirmed", "likely"} and r.get("Scope").lower() in {"all", "everything", "any", "all work", "always"}:
             items.append(f"Narrow {r.id}: scope '{r.get('Scope')}' is unbounded. Name the work it applies to.")
+    items += clarity_issues(profile, today)
     if not items:
         return f"Nothing to review in {len(profile.records)} records."
     return f"# Mini Me review: {len(items)} suggestion(s), nothing applied\n\n" + "\n".join(f"{i}. {t}" for i, t in enumerate(items, 1))
+
+
+VAGUE = {"better", "good", "nice", "properly", "proper", "appropriate", "appropriately", "etc", "stuff",
+         "things", "improve", "optimal", "best", "correctly", "nicely", "well"}
+TRIGGER_WORDS = ("when", "if", "for", "before", "after", "whenever", "while", "once")
+
+
+def clarity_issues(profile: Profile, today: dt.date) -> list[str]:
+    """Rules another agent could misapply: vague, unbounded, too long, or missing the why."""
+    out: list[str] = []
+    ask_why = []
+    for r in profile.records:
+        if not is_active(r, today):
+            continue
+        if r.prefix == "dec":
+            src = parse_date(r.get("Updated")) or parse_date(r.get("Source date"))
+            if is_pending(r) and src and (today - src).days > 14:
+                out.append(f"Close {r.id}: still open after {(today - src).days} days. Record the user's actual choice with `choose {r.id}`.")
+            continue
+        if r.prefix in NON_RULE or said_by_other(r):
+            continue
+        cond, act = r.get("Condition"), r.get("Action")
+        if cond and not cond.lower().startswith(TRIGGER_WORDS):
+            out.append(f"Clarify {r.id}: start the condition with 'When …' so it is clear when the rule applies.")
+        vague = sorted({w for w in re.findall(r"[a-z]+", act.lower()) if w in VAGUE})
+        if vague:
+            out.append(f"Make {r.id} concrete: '{', '.join(vague)}' is vague. Say exactly what to do.")
+        if len(act.split()) > 30:
+            out.append(f"Split {r.id}: {len(act.split())} words in one action. One rule, one action.")
+        if r.status in {"confirmed", "likely"} and r.get("Reason").lower() in {"", "unknown"}:
+            ask_why.append(r)
+    ask_why.sort(key=lambda r: (-STATUS_RANK.get(r.status, 0), r.date()))
+    for r in ask_why[:3]:
+        out.append(f"Ask why for {r.id}: '{r.get('Action')}' has no reason. The reason tells the agent where else it applies.")
+    if len(ask_why) > 3:
+        out.append(f"…and {len(ask_why) - 3} more rules without a reason. Ask about the ones you use most.")
+    hits, scored = track_record(profile)
+    if scored >= 3 and hits / scored < 0.5:
+        out.append(f"Predictions were right {hits} of {scored} times. Treat 'which would I choose?' answers as low confidence, "
+                   "and record the reason each time the user chooses differently.")
+    return out
+
+
+def choose_record(path: Path, rid: str, choice: str, reason: str | None = None, evidence: str | None = None,
+                  sources: str | None = None, today: dt.date | None = None) -> str:
+    """Record the user's actual choice on a decision, keeping the earlier prediction for the track record."""
+    today = today or dt.date.today()
+    if not choice or choice.strip().lower() in PENDING:
+        raise MiniMeError("give the choice the user actually made")
+    profile = parse(path)
+    r = profile.by_id().get(rid)
+    if r is None or r.prefix != "dec":
+        raise MiniMeError(f"no decision record '{rid}'")
+    lines = list(profile.lines)
+    set_field(lines, r, "Choice", choice.strip())
+    if reason:
+        set_field(lines, r, "Reason", reason.strip())
+    if evidence:
+        set_field(lines, r, "Evidence", f"{r.get('Evidence')} | {evidence.strip()}" if r.get("Evidence") else evidence.strip())
+    if sources:
+        have = r.sources()
+        add = [s.strip() for s in re.split(r"[,;]", sources) if s.strip() and s.strip().lower() not in {h.lower() for h in have}]
+        if add:
+            set_field(lines, r, "Sources", ", ".join(have + add))
+    set_field(lines, r, "Status", "confirmed")
+    set_field(lines, r, "Updated", today.isoformat())
+    commit(path, "\n".join(lines) + "\n", profile.digest, today)
+    msg = f"Recorded the choice on {rid}: {choice.strip()}."
+    pred = r.get("Predicted")
+    if not is_empty(pred):
+        right = norm_text(pred) == norm_text(choice)
+        msg += f" Mini Me had predicted {pred}: {'right' if right else 'wrong'}."
+        if not right and not reason:
+            msg += " Ask the user why: the reason is what fixes the next prediction."
+    hits, scored = track_record(parse(path))
+    if scored:
+        msg += f" Track record: {hits} of {scored} predictions right."
+    return msg
+
+
+CONFIDENCE = {
+    "confirmed": "Confirmed: the user said this explicitly.",
+    "likely": "Likely: supported by {n} independent sources, but not stated outright.",
+    "tentative": "Tentative: inferred from one example. Ask before relying on it outside the same task.",
+    "superseded": "Superseded: replaced by a newer record. Not applied.",
+}
+
+
+def explain_text(profile: Profile, rid: str, today: dt.date | None = None) -> str:
+    """One record in plain language: what it makes the agent do, why, how sure, and where it came from."""
+    today = today or dt.date.today()
+    by_id = profile.by_id()
+    r = by_id.get(rid)
+    if r is None:
+        raise MiniMeError(f"no record '{rid}'")
+    out = [f"## {r.id} · {TYPES.get(r.prefix, r.type_label)}"]
+    if r.prefix == "dec":
+        out.append(f"**Question:** {r.get('Question')}")
+        out.append(f"**Options:** {r.get('Options')}")
+        if is_pending(r):
+            out.append(f"**Your choice:** not recorded yet. Mini Me predicted **{r.get('Predicted')}**.")
+        else:
+            out.append(f"**You chose:** {r.get('Choice')}")
+            out.append(f"**Why:** {r.get('Reason') or 'not recorded'}")
+            hit = prediction_hit(r)
+            if hit is not None:
+                out.append(f"**Prediction:** Mini Me predicted {r.get('Predicted')}, which was {'right' if hit else 'wrong'}.")
+    elif r.prefix == "proj":
+        out.append(f"**Project:** {r.get('Project')}")
+        if not is_empty(r.get("Constraints")):
+            out.append(f"**Client requirements:** {r.get('Constraints')}")
+        out.append(f"**Latest version:** {r.get('Latest version')}")
+        out.append(f"**Last decision:** {r.get('Last decision')}")
+        out.append(f"**Next step:** {r.get('Next step')}")
+    else:
+        act = r.get("Action")
+        out.append(f"**{r.get('Condition').rstrip('.')},** Mini Me will: {act[:1].lower() + act[1:]}.")
+        out.append(f"**Only for:** {r.get('Scope')}.")
+        if not is_empty(r.get("Exceptions")) and r.get("Exceptions").lower() != "none known":
+            out.append(f"**Except:** {r.get('Exceptions')}.")
+        if not is_empty(r.get("Expires")):
+            out.append(f"**Expires:** {r.get('Expires')}" + (" (already expired, not applied)." if is_expired(r, today) else "."))
+        reason = r.get("Reason")
+        if reason.lower() in {"", "unknown"}:
+            out.append("**Why:** not known yet. Telling Mini Me why lets it apply this rule in the right new situations.")
+        else:
+            out.append(f"**Why:** {reason}.")
+        if said_by_other(r):
+            out.append(f"**Whose rule:** {r.get('Said by')}. It is their instruction, not your own preference.")
+        if r.prefix == "sens":
+            out.append(f"**Kept for:** {r.get('Purpose')} (sensitive, stored because you asked).")
+    if is_pending(r):
+        hits, scored = track_record(profile)
+        record = f" Past predictions: {hits} of {scored} right." if scored else ""
+        out.append(f"**How sure:** a prediction only, until the user decides.{record}")
+    else:
+        out.append(f"**How sure:** {CONFIDENCE.get(r.status, r.status).format(n=len(r.sources()))}")
+    out.append(f"**Evidence:** {r.get('Evidence')} (source: {r.get('Sources')}, {r.get('Source date')}).")
+    replaced = [s.strip() for s in re.split(r"[,;]", r.get("Supersedes")) if s.strip() and not is_empty(s)]
+    for old in replaced:
+        o = by_id.get(old)
+        if o:
+            out.append(f"**Replaced:** {old} ({o.get('Action') or o.get('Choice')}) on {r.get('Source date')}.")
+    newer = [x for x in profile.records if rid in [s.strip() for s in re.split(r"[,;]", x.get("Supersedes"))]]
+    for x in newer:
+        out.append(f"**Replaced by:** {x.id} ({x.get('Action') or x.get('Choice')}) on {x.get('Source date')}.")
+    return "\n".join(out) + "\n"
+
+
+def history_events(profile: Profile, today: dt.date) -> list[tuple[dt.date, str, str]]:
+    events = []
+    by_id = profile.by_id()
+    for r in profile.records:
+        first = parse_date(r.get("Source date")) or dt.date.min
+        last = parse_date(r.get("Updated")) or first
+        if r.prefix == "dec":
+            if is_pending(r):
+                events.append((last, r.id, f"Asked: {r.get('Question')} Mini Me predicted {r.get('Predicted')}. Your choice is still open."))
+            else:
+                hit = prediction_hit(r)
+                tail = "" if hit is None else f" (Mini Me predicted {r.get('Predicted')}: {'right' if hit else 'wrong'})"
+                events.append((last, r.id, f"Decided: {r.get('Question')} → {r.get('Choice')}. Why: {r.get('Reason') or 'not recorded'}{tail}"))
+            continue
+        if r.prefix == "proj":
+            events.append((last, r.id, f"Project {r.get('Project')}: {r.get('Last decision')}. Next: {r.get('Next step')}"))
+            continue
+        what = f"{r.get('Condition')} → {r.get('Action')}"
+        olds = [s.strip() for s in re.split(r"[,;]", r.get("Supersedes")) if s.strip() and not is_empty(s)]
+        if olds:
+            events.append((first, r.id, f"Corrected {', '.join(olds)}: {what}"))
+        elif r.prefix == "exc":
+            events.append((first, r.id, f"One-off ({r.get('Expires')}): {what}"))
+        else:
+            label = "Noted" if said_by_other(r) else "Learned"
+            who = f" (said by {r.get('Said by')})" if said_by_other(r) else ""
+            events.append((first, r.id, f"{label}, {r.status}{who}: {what}"))
+        if r.status in {"likely", "confirmed"} and last > first and not olds:
+            events.append((last, r.id, f"Strengthened to {r.status}: {len(r.sources())} source(s)"))
+    return events
+
+
+def history_text(profile: Profile, project: str | None = None, since: str | None = None, limit: int = 30,
+                 today: dt.date | None = None) -> str:
+    """Timeline, newest first: what you decided, what was learned, what was corrected."""
+    today = today or dt.date.today()
+    events = history_events(profile, today)
+    if project:
+        keep = {r.id for r in profile.records if project.lower() in " ".join(r.fields.values()).lower()}
+        events = [e for e in events if e[1] in keep]
+    if since:
+        d = parse_date(since)
+        if d is None:
+            raise MiniMeError("--since must be YYYY-MM-DD")
+        events = [e for e in events if e[0] >= d]
+    events.sort(key=lambda e: (e[0], e[1]), reverse=True)
+    if not events:
+        return "No history yet."
+    out = ["# Mini Me history (newest first)", ""]
+    out += [f"- {d.isoformat()} · **{rid}** · {text}" for d, rid, text in events[:limit]]
+    if len(events) > limit:
+        out.append(f"- … {len(events) - limit} older events (use --limit)")
+    return "\n".join(out) + "\n"
+
+
+def stats_text(profile: Profile, today: dt.date | None = None) -> str:
+    today = today or dt.date.today()
+    active = [r for r in profile.records if is_active(r, today)]
+    rules = [r for r in active if r.prefix not in NON_RULE]
+    by_status = {s: sum(1 for r in rules if r.status == s) for s in ("confirmed", "likely", "tentative")}
+    with_reason = sum(1 for r in rules if r.get("Reason").lower() not in {"", "unknown"})
+    decs = [r for r in profile.records if r.prefix == "dec"]
+    open_decs = sum(1 for r in decs if is_pending(r))
+    hits, scored = track_record(profile)
+    out = [
+        "# Mini Me stats",
+        "",
+        f"- Active rules: {len(rules)} ({by_status['confirmed']} confirmed, {by_status['likely']} likely, {by_status['tentative']} tentative)",
+        f"- Rules with a known reason: {with_reason} of {len(rules)}",
+        f"- Decisions recorded: {len(decs)} ({open_decs} still open)",
+        f"- Prediction track record: " + (f"{hits} of {scored} right" if scored else "no scored predictions yet"),
+        f"- Inactive (superseded or expired): {len(profile.records) - len(active)}",
+    ]
+    return "\n".join(out) + "\n"
 
 
 # --------------------------------------------------------------------------- read-only views
@@ -832,9 +1112,12 @@ def show_text(profile: Profile, today: dt.date | None = None, **filters) -> str:
     records = select(profile, today, **filters)
     if not records:
         return "No matching active records."
+    decisions = [r for r in records if r.prefix == "dec"]
+    records = [r for r in records if r.prefix != "dec"]
     groups = (
         ("Stated by you", [r for r in records if r.status not in INFERRED and not said_by_other(r)]),
         ("Inferred: correct me if wrong", [r for r in records if r.status in INFERRED and not said_by_other(r)]),
+        ("Your decisions", decisions),
         ("Said by others: applied only within their scope", [r for r in records if said_by_other(r)]),
     )
     out = []
@@ -889,7 +1172,6 @@ def cmd_init(args) -> int:
     except OSError:
         pass
     print(f"Created {path} (private, mode 600).")
-    print("Mini Me is free for personal and noncommercial use. Work or client use needs Mini Me Pro: see LICENSING.md.")
     return 0
 
 
@@ -963,6 +1245,27 @@ def cmd_forget(args) -> int:
     return 0
 
 
+def cmd_explain(args) -> int:
+    print(explain_text(load(args), args.id), end="")
+    return 0
+
+
+def cmd_history(args) -> int:
+    print(history_text(load(args), project=args.project, since=args.since, limit=args.limit), end="")
+    return 0
+
+
+def cmd_stats(args) -> int:
+    print(stats_text(load(args)), end="")
+    return 0
+
+
+def cmd_choose(args) -> int:
+    load(args)
+    print(choose_record(resolve_path(args.profile), args.id, args.choice, args.reason, args.evidence, args.sources))
+    return 0
+
+
 def cmd_next_id(args) -> int:
     prefix = type_prefix(args.prefix) or args.prefix
     if prefix not in TYPES:
@@ -979,6 +1282,7 @@ ADD_FLAGS = [
     ("supersedes", "Supersedes"), ("project", "Project"), ("constraints", "Constraints"),
     ("latest_version", "Latest version"), ("last_decision", "Last decision"), ("completed", "Completed"),
     ("next_step", "Next step"), ("sensitivity", "Sensitivity"),
+    ("question", "Question"), ("options", "Options"), ("choice", "Choice"), ("predicted", "Predicted"),
 ]
 
 
@@ -1000,7 +1304,7 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("--json", action="store_true")
 
     ap = sub.add_parser("add", help="add a record, or merge it into the same decision")
-    ap.add_argument("--type", help="goal, pref, rule, method, exc, sens, proj")
+    ap.add_argument("--type", help="goal, pref, rule, method, exc, sens, proj, dec")
     ap.add_argument("--json", help="JSON object of fields, from a file or '-' for stdin")
     for flag, key in ADD_FLAGS:
         ap.add_argument("--" + flag.replace("_", "-"), dest=flag, help=key)
@@ -1019,6 +1323,23 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--include-sensitive", action="store_true", help="include sensitive records")
             sp.add_argument("-o", "--output", help="write to file instead of stdout")
 
+    xp = sub.add_parser("explain", help="one record in plain language: what it does, why, how sure, its history")
+    xp.add_argument("id")
+
+    hp = sub.add_parser("history", help="timeline of decisions, lessons and corrections, newest first")
+    hp.add_argument("--project", help="substring match on any field")
+    hp.add_argument("--since", help="YYYY-MM-DD")
+    hp.add_argument("--limit", type=int, default=30)
+
+    sub.add_parser("stats", help="rules by confidence, reasons known, decisions, prediction track record")
+
+    cp = sub.add_parser("choose", help="record the user's actual choice on a decision (dec-)")
+    cp.add_argument("id")
+    cp.add_argument("--choice", required=True)
+    cp.add_argument("--reason")
+    cp.add_argument("--evidence")
+    cp.add_argument("--sources")
+
     fp = sub.add_parser("forget", help="remove a record and references to it")
     fp.add_argument("id")
     fp.add_argument("--dry-run", action="store_true")
@@ -1033,6 +1354,7 @@ def main(argv: list[str] | None = None) -> int:
     handler = {
         "init": cmd_init, "validate": cmd_validate, "recall": cmd_recall, "add": cmd_add, "review": cmd_review,
         "show": cmd_show, "export": cmd_export, "forget": cmd_forget, "next-id": cmd_next_id,
+        "explain": cmd_explain, "history": cmd_history, "stats": cmd_stats, "choose": cmd_choose,
     }[args.cmd]
     try:
         return handler(args)
