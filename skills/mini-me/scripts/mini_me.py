@@ -22,7 +22,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-__version__ = "2.2.0"
+__version__ = "2.2.1"
 
 TYPES = {
     "goal": "Goal",
@@ -273,6 +273,7 @@ when while into about over under after before up out not no yes all any some eac
 
 # Verbs that name the same act of producing a document. Kept tiny on purpose: precision matters.
 SYNONYMS = {
+    "choose": "choos", "chose": "choos", "chosen": "choos",
     "draft": "writ", "write": "writ", "compose": "writ", "prepare": "writ",
     "creat": "make", "create": "make", "build": "make",
     "direction": "option", "alternative": "option", "concept": "option", "variant": "option", "choice": "option",
@@ -556,8 +557,13 @@ def recall_data(profile: Profile, brief: str, k: int = 8, today: dt.date | None 
         # A record is triggered when the brief covers most of its Condition. Missing a triggered rule is worse
         # than showing an extra one, so triggered records are kept even when another record scores far higher.
         cond = set(tokens(r.get("Condition") or r.get("Project")))
-        triggered = bool(cond) and len(cond & q) / len(cond) >= 0.5
+        hit = len(cond & q)
+        triggered = bool(cond) and hit / len(cond) >= 0.5 and hit >= min(2, len(cond))
         if s <= 0:
+            continue
+        # Precision guard: an untriggered rule needs at least two distinct brief words in what it is about
+        # (its condition and action). One shared word ("client", "review") is a coincidence, not relevance.
+        if not triggered and r.prefix != "proj" and len(set(tokens(r.get("Condition") + " " + r.get("Action"))) & q) < 2:
             continue
         strong = triggered or s >= threshold
         (active if is_active(r, today) else inactive).append((s, strong, r))

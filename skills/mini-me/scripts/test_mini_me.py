@@ -296,6 +296,15 @@ class TestRecallS4(unittest.TestCase):
         same = mini_me.recall_data(profile, "Landing page for Kestrel Coffee", today=TODAY)
         self.assertIn("pref-001", {x["id"] for x in same["groups"]["stated"]})
 
+    def test_one_shared_word_is_not_relevance(self):
+        brief = "Draft the Halden Shipping proposal: new client, fixed scope, procurement will review it"
+        d = mini_me.recall_data(mini_me.parse(S4), brief, today=TODAY)
+        ids = {x["id"] for g in d["groups"].values() for x in g}
+        for rid in ("rule-011", "rule-014", "pref-004", "pref-021", "pref-009", "pref-017"):
+            self.assertIn(rid, ids)
+        for noise in ("pref-045", "pref-065", "rule-026", "method-004"):  # "review"/"client" coincidences
+            self.assertNotIn(noise, ids)
+
     def test_unrelated_brief_matches_little(self):
         d = mini_me.recall_data(mini_me.parse(S4), "plan my grocery shopping list", today=TODAY)
         self.assertLessEqual(d["matched"], 2)

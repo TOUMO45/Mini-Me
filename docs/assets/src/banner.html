@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mini Me Banner</title>
+<style>
+:root{--cream:#F9F4EA;--blue:#0029CE;--navy:#061545;--coral:#FE6639;--mute:#5B6478}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1280px;height:640px;overflow:hidden;background:var(--cream);font-family:'Inter Display','Inter',sans-serif;-webkit-font-smoothing:antialiased;color:var(--navy)}
+.shape{position:absolute;border-radius:50%}
+.logo{position:absolute;left:96px;top:140px;width:380px}
+.copy{position:absolute;left:560px;top:118px;width:640px}
+.h{font-weight:800;letter-spacing:-0.035em;line-height:1.02;font-size:76px}
+.sub{margin-top:22px;font-size:26px;line-height:1.4;font-weight:500;color:var(--mute)}
+.pills{margin-top:34px;display:flex;flex-wrap:wrap;gap:12px}
+.pill{border-radius:999px;font-weight:700;font-size:19px;padding:11px 20px;white-space:nowrap}
+.foot{position:absolute;left:96px;bottom:44px;font-size:17px;font-weight:600;color:var(--mute);letter-spacing:.02em}
+</style>
+</head>
+<body>
+  <div class="shape" style="width:520px;height:520px;right:-180px;bottom:-260px;background:rgba(0,41,206,.07)"></div>
+  <div class="shape" style="width:260px;height:260px;right:120px;top:-150px;background:rgba(254,102,57,.10)"></div>
+  <img class="logo" src="../../../marketing/reel/logo_full.png" alt="">
+  <div class="copy">
+    <div class="h">Your AI,<br>working <span style="color:var(--coral)">your way.</span></div>
+    <div class="sub">An agent skill that learns how you work, and why: rules with reasons, decisions with precedents.</div>
+    <div class="pills">
+      <span class="pill" style="background:var(--blue);color:#fff">Learns from your edits</span>
+      <span class="pill" style="background:var(--navy);color:#fff">Knows where each rule applies</span>
+      <span class="pill" style="background:var(--coral);color:#fff">Recalls only what matters</span>
+    </div>
+  </div>
+  <div class="foot">Claude Code · Cursor · any MCP agent &nbsp;·&nbsp; MIT License &nbsp;·&nbsp; Zero dependencies</div>
+</body>
+</html>

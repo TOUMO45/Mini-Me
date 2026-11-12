@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mini Me recall</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1200px;background:transparent;font-family:'JetBrains Mono',monospace;-webkit-font-smoothing:antialiased}
+.wrap{padding:28px}
+.win{background:#0B1230;border-radius:18px;box-shadow:0 30px 70px rgba(6,21,69,.35),0 0 0 1px rgba(255,255,255,.06) inset;overflow:hidden}
+.bar{height:46px;display:flex;align-items:center;gap:9px;padding:0 20px;background:#111A3D;border-bottom:1px solid rgba(255,255,255,.06)}
+.dot{width:13px;height:13px;border-radius:50%}
+.title{margin-left:auto;margin-right:auto;transform:translateX(-30px);color:#8C97BF;font-size:14px;font-family:'Inter Display','Inter',sans-serif;font-weight:600}
+.term{padding:26px 30px 30px;color:#E6EAFA;font-size:17px;line-height:1.75}
+.cmd{color:#fff}
+.ps{color:#FE6639;font-weight:700}
+.str{color:#9DB4FF}
+.dim{color:#8C97BF}
+.h{margin-top:14px;font-weight:700;letter-spacing:.02em}
+.ln{padding-left:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.id{color:#fff;font-weight:700}
+.st{display:inline-block;font-size:13px;padding:0 8px;border-radius:6px;margin:0 8px 0 4px;vertical-align:1px;font-weight:700}
+.st.confirmed{background:rgba(124,240,180,.15);color:#7CF0B4}
+.st.tentative{background:rgba(255,196,107,.15);color:#FFC46B}
+.st.likely{background:rgba(157,180,255,.15);color:#9DB4FF}
+.x{color:#FFB39E}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="win">
+    <div class="bar"><div class="dot" style="background:#FF5F57"></div><div class="dot" style="background:#FEBC2E"></div><div class="dot" style="background:#28C840"></div><div class="title">mini-me · 61-record profile</div></div>
+    <div class="term">
+{{BODY}}
+    </div>
+  </div>
+</div>
+</body>
+</html>

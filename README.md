@@ -1,10 +1,61 @@
-# Mini Me
+<p align="center">
+  <img src="docs/assets/banner.png" alt="Mini Me: your AI, working your way" width="100%">
+</p>
 
-**A portable memory for how you work, for any AI agent.** Mini Me learns what you chose, why, when it applies, and what justifies an exception. Then it finishes new work the way you would. Every inference is traceable to evidence and open to correction.
+<p align="center">
+  <a href="https://github.com/TOUMO45/Mini-Me/actions/workflows/test.yml"><img src="https://github.com/TOUMO45/Mini-Me/actions/workflows/test.yml/badge.svg" alt="tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0029CE" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-061545" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/dependencies-zero-FE6639" alt="zero dependencies">
+  <img src="https://img.shields.io/badge/MCP-11_tools-0029CE" alt="MCP: 11 tools">
+</p>
 
-**Success metric:** fewer edits before you accept the result, on tasks the agent has never seen.
+<p align="center">
+  <b>A portable memory for how you work, for any AI agent.</b><br>
+  Mini Me learns what you chose, why, when it applies, and what justifies an exception.<br>
+  Then it finishes new work the way you would, and shows you why.
+</p>
 
-[![test](https://github.com/TOUMO45/Mini-Me/actions/workflows/test.yml/badge.svg)](https://github.com/TOUMO45/Mini-Me/actions/workflows/test.yml)
+<p align="center">
+  <a href="#see-it-in-action">See it in action</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#use-it-with-your-agent">Use it with your agent</a> ·
+  <a href="#commands">Commands</a> ·
+  <a href="#evidence">Evidence</a>
+</p>
+
+---
+
+## See it in action
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="marketing/reel/Mini_Me_Reel_v2.mp4">
+        <img src="docs/assets/reel-recall.gif" alt="Mini Me recall: 61 records scanned, 5 rules applied, 2 outdated rules struck out" width="300">
+      </a>
+      <br>
+      <sub><b><a href="marketing/reel/Mini_Me_Reel_v2.mp4">▶ Watch the 30-second reel</a></b> (with sound)</sub>
+    </td>
+    <td align="center" width="50%">
+      <a href="marketing/infographic/Mini_Me_Infographic_4x5_2x.png">
+        <img src="marketing/infographic/Mini_Me_Infographic_4x5.png" alt="Mini Me infographic: learn, scope, recall" width="340">
+      </a>
+      <br>
+      <sub><b>Learn → Scope → Recall</b>, on one page</sub>
+    </td>
+  </tr>
+</table>
+
+### What your agent actually gets
+
+<p align="center">
+  <img src="docs/assets/recall-terminal.png" alt="Real recall output: four confirmed rules applied, two tentative ones flagged, a conflict resolved, a superseded rule and an expired discount excluded" width="100%">
+</p>
+
+<p align="center"><sub>Real <code>recall</code> output from the 61-record test profile. Long lines are shortened for the image.</sub></p>
+
+Out of 61 records, recall returns only what this task needs. It resolves a conflict in favour of your latest correction, and it blocks a rule you replaced and a discount that expired. That's about **600 tokens** of context instead of 6,100.
 
 ## Why it's different
 
@@ -16,22 +67,28 @@
 | Your manager's or client's rules | Mixed into "your" preferences | Attributed (`Said by`) and limited to the scope they stated |
 | Past decisions | Lost in old chats | **Decision history**: what you chose, between what, and why. Used as precedents for the next choice |
 | "Which would I choose?" | A confident guess | A prediction **with its track record** ("right 1 of 3 times so far"), logged and checked against what you actually chose |
-| Per-task cost | Grows with history | **~570 tokens**, flat from 61 to 4,000 records |
+| Per-task cost | Grows with history | **~600 tokens**, flat from 61 to 4,000 records |
 | Trust | Opaque | A plain Markdown file you own. It refuses to store credentials, and it can explain or forget any rule |
 | Lock-in | One vendor | Claude Code skill, MCP server, AGENTS.md, CLI, or pasted instructions |
 
 ## How it works
 
-```
- today's brief ──► recall ──► only the 8 records that matter ──► deliverable
-                     ▲         (apply / inferred / others' / conflicts resolved / do-not-apply)
-                     │
- your edits & corrections ──► add ──► merge, promote, supersede, validate ──► private profile.md
+```mermaid
+flowchart LR
+    B["Today's brief"] --> R["recall"]
+    P[("profile.md<br>your private file")] --> R
+    R --> A["Rules to apply<br>+ precedents<br>+ conflicts resolved"]
+    R --> X["Do not apply<br>replaced · expired"]
+    A --> D["Deliverable"]
+    D --> E["Your edits,<br>corrections, choices"]
+    E --> L["add · choose"]
+    L --> P
 ```
 
 Each task runs the same loop: **Brief → Recall → Decide → Deliver → Learn**. Learning is built to need few examples:
+
 - **Harvest the diff.** Every edit you make becomes one record.
-- **Ask for one reason.** Ask why for the single most consequential edit. The reason is what transfers to new situations.
+- **Ask for one reason.** Mini Me asks why only for the single most consequential edit. The reason is what transfers to new situations.
 - **Compound.** A second independent example promotes a guess to `likely`. `review` suggests merges and resolves conflicts.
 - **Decide from precedent.** Past decisions come back as precedents, with the reason behind each. Predictions are logged, then scored against your real choice.
 - **Stay readable.** `explain <ID>` turns any rule into a plain sentence with its reason, confidence and history. `review` flags vague rules and rules with no reason.
@@ -57,7 +114,7 @@ The profile lives at `~/.mini-me/profile.md`. Override it with `$MINI_ME_PROFILE
 | Agent | Setup |
 |---|---|
 | **Claude Code** | Works in this repo (`.claude/skills/mini-me`). Everywhere: `cp -r skills/mini-me ~/.claude/skills/` |
-| **Claude Desktop, Cursor, any MCP client** | Add `skills/mini-me/scripts/mcp_server.py` as an MCP server. It provides 7 tools |
+| **Claude Desktop, Cursor, any MCP client** | Add `skills/mini-me/scripts/mcp_server.py` as an MCP server. It provides 11 tools |
 | **Codex and other AGENTS.md readers** | `AGENTS.md` points them to the skill and `recall` |
 | **ChatGPT, Gemini, chat UIs** | Paste the SKILL.md body as instructions. Paste a `recall` or `export` block per task |
 | **Your own agent (API)** | Put the SKILL.md body in the system prompt and inject `recall` output per task |
@@ -97,8 +154,8 @@ The skill was built test-first. Fresh agents ran each scenario without the skill
 
 | Records | Whole profile | `recall` | Relevant found | Traps excluded |
 |---|---|---|---|---|
-| 61 | ~6,100 tokens | ~570 | 6/6 | 2/2 |
-| 1,010 | ~101,000 | ~570 | 6/6 | 2/2 |
+| 61 | ~6,100 tokens | ~610 | 6/6 | 2/2 |
+| 1,010 | ~101,000 | ~610 | 6/6 | 2/2 |
 | 4,010 | ~404,000 | ~610 | 6/6 | 2/2 |
 
 What this does **not** show: each scenario ran once (n = 1), and the fixtures and benchmark distractors are synthetic. Whether Mini Me reduces *your* edits is measured on your own held-out tasks with the blind A/B harness:
@@ -129,12 +186,10 @@ skills/mini-me/
   scripts/mcp_server.py       MCP server
   templates/profile.template.md
 eval/                         scenarios, rubrics, results, A/B harness, scale benchmark
+marketing/                    reel, infographic, launch posts (each with editable source)
+docs/assets/                  README visuals (rebuild: docs/assets/src/)
 AGENTS.md  CHANGELOG.md  .github/workflows/test.yml
 ```
-
-## License
-
-[MIT](LICENSE) © 2026 Kamari Fatima Zuhra. Free to use, modify, and share, including commercially.
 
 ## Privacy
 
@@ -153,3 +208,7 @@ python3 -m unittest discover -s eval
 ```bash
 python3 eval/bench_scale.py
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 Kamari Fatima Zuhra. Free to use, modify, and share, including commercially.

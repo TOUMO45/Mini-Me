@@ -26,4 +26,4 @@ ffmpeg -framerate 30 -i frames/%05d.jpg -i sfx_norm.wav -c:v libx264 -crf 18 -pi
 
 Needs Node with Playwright, Python 3 with numpy, ffmpeg, and the fonts Inter Display and JetBrains Mono.
 
-Every on-screen claim comes from `eval/`: the 570 vs 6,100 tokens figure is measured on the 61-record test profile (`eval/bench_scale.py`).
+Every on-screen claim comes from `eval/`: the ~600 vs 6,100 tokens figure is measured on the 61-record test profile (`eval/bench_scale.py`).

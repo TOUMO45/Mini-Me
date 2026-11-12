@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mini Me recall</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1200px;background:transparent;font-family:'JetBrains Mono',monospace;-webkit-font-smoothing:antialiased}
+.wrap{padding:28px}
+.win{background:#0B1230;border-radius:18px;box-shadow:0 30px 70px rgba(6,21,69,.35),0 0 0 1px rgba(255,255,255,.06) inset;overflow:hidden}
+.bar{height:46px;display:flex;align-items:center;gap:9px;padding:0 20px;background:#111A3D;border-bottom:1px solid rgba(255,255,255,.06)}
+.dot{width:13px;height:13px;border-radius:50%}
+.title{margin-left:auto;margin-right:auto;transform:translateX(-30px);color:#8C97BF;font-size:14px;font-family:'Inter Display','Inter',sans-serif;font-weight:600}
+.term{padding:26px 30px 30px;color:#E6EAFA;font-size:17px;line-height:1.75}
+.cmd{color:#fff}
+.ps{color:#FE6639;font-weight:700}
+.str{color:#9DB4FF}
+.dim{color:#8C97BF}
+.h{margin-top:14px;font-weight:700;letter-spacing:.02em}
+.ln{padding-left:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.id{color:#fff;font-weight:700}
+.st{display:inline-block;font-size:13px;padding:0 8px;border-radius:6px;margin:0 8px 0 4px;vertical-align:1px;font-weight:700}
+.st.confirmed{background:rgba(124,240,180,.15);color:#7CF0B4}
+.st.tentative{background:rgba(255,196,107,.15);color:#FFC46B}
+.st.likely{background:rgba(157,180,255,.15);color:#9DB4FF}
+.x{color:#FFB39E}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="win">
+    <div class="bar"><div class="dot" style="background:#FF5F57"></div><div class="dot" style="background:#FEBC2E"></div><div class="dot" style="background:#28C840"></div><div class="title">mini-me · 61-record profile</div></div>
+    <div class="term">
+<div class="cmd"><span class="ps">$</span> mini_me recall <span class="str">"Draft the Halden Shipping proposal: new client, fixed scope, procurement will review it"</span></div>
+<div class="dim">7 of 61 records matched</div>
+<div class="h" style="color:#7CF0B4">Apply: stated by you</div>
+<div class="ln"><span class="id">rule-011</span> <span class="st confirmed">confirmed</span> When writing a client proposal → Lead with T&amp;M if the scope will move; lead with fixed fe…</div>
+<div class="ln"><span class="id">rule-014</span> <span class="st confirmed">confirmed</span> When procurement will read a proposal → Add a terms appendix: payment schedule, liability cap, d…</div>
+<div class="ln"><span class="id">pref-004</span> <span class="st confirmed">confirmed</span> When writing a client proposal → Include a pricing table with three tiers</div>
+<div class="ln"><span class="id">pref-021</span> <span class="st confirmed">confirmed</span> When writing a client proposal → Put exactly one case study right after the executive sum…</div>
+<div class="h" style="color:#FFC46B">Apply with care: inferred</div>
+<div class="ln"><span class="id">pref-009</span> <span class="st tentative">tentative</span> When writing a client proposal → Put all case studies in a section at the end</div>
+<div class="ln"><span class="id">pref-017</span> <span class="st tentative">tentative</span> When signing a client proposal → Sign as &#x27;Sam Okafor, Principal&#x27;</div>
+<div class="h" style="color:#C9D3FA">Check scope: names another client or project</div>
+<div class="ln"><span class="id">proj-003</span> <span class="st confirmed">confirmed</span> Brightline Ports proposal (not this client)</div>
+<div class="h" style="color:#9DB4FF">Conflict resolved</div>
+<div class="ln">pref-009 vs pref-021 → use <span class="id">pref-021</span> <span class="dim">(latest explicit correction)</span></div>
+<div class="h" style="color:#FF8A66">Do not apply</div>
+<div class="ln x"><span class="id">rule-003</span> superseded by rule-011</div>
+<div class="ln x"><span class="id">exc-002</span> expired 2026-10-31</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

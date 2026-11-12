@@ -67,7 +67,7 @@ It doesn't dump your whole history into the prompt.
 
 It recalls only the rules that match today's task, and flags what's replaced or expired.
 
-On a 61-record test profile: ~570 tokens instead of 6,100.
+On a 61-record test profile: ~600 tokens instead of 6,100.
 ```
 
 **5/ (attach the infographic)**
@@ -115,7 +115,7 @@ So I built Mini Me, a skill that learns how you work and why:
 
 1. Learn: one edit plus one reason becomes a reusable rule, with its evidence.
 2. Scope: every rule knows where it applies. One-offs expire. A colleague's instructions stay theirs. A client's brief stays with that client.
-3. Recall: for each new task, it brings back only the rules that matter and flags the ones that were replaced or expired. On a 61-record test profile, that's about 570 tokens of context instead of 6,100.
+3. Recall: for each new task, it brings back only the rules that matter and flags the ones that were replaced or expired. On a 61-record test profile, that's about 600 tokens of context instead of 6,100.
 
 Trust was a design requirement, not a feature. Your memory is a plain file you own. You can see every rule, correct it or delete it. Every inference is labelled as confirmed, likely or tentative. It refuses to store passwords or keys.
 

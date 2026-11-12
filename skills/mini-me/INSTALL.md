@@ -9,7 +9,7 @@ Requires Python 3.11+ (standard library only, nothing to `pip install`).
 **Claude Code (all projects):** unzip so this folder becomes `~/.claude/skills/mini-me/`.
 
 ```bash
-unzip mini-me-v2.2.0.zip -d ~/.claude/skills/
+unzip mini-me-v2.2.1.zip -d ~/.claude/skills/
 ```
 
 **Claude.ai / Claude apps:** upload the zip as a custom skill (Settings → Capabilities → Skills), if your plan supports custom skills.

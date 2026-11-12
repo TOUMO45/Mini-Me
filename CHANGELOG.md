@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.1 — 2026-11-12
+
+### Fixed
+- **Recall precision.** A single shared word ("client", "review") no longer pulls in unrelated rules. An untriggered rule now needs two distinct brief words in its condition or action, and a trigger needs two matching words when the condition has two or more. On the Halden brief: 7 records instead of 12, with all 6 relevant rules and both traps still handled at every benchmark size (regression test added).
+- The per-task cost is now measured at **~610 tokens** (it was ~570 before recall started showing the "check scope" group). The reel, infographic, posts and README now say "~600".
+
+### Added
+- A professional README: hero banner (also usable as the GitHub social preview), badges, an animated reel preview linked to the full video, the infographic, a real `recall` terminal screenshot, and a flowchart. All visuals rebuild from `docs/assets/src/`.
+
 ## 2.2.0 — 2026-11-12
 
 **Remembers your decisions, not only your rules.**
